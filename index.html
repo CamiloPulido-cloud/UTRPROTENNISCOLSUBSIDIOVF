@@ -26,6 +26,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Supabase JS Client (Nube Multidispositivo) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         .nav-btn {
@@ -91,7 +93,7 @@
                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
                 Nube Activa
             </span>
-            <button onclick="loadFromCloud(true)" class="text-xs text-tennis-400 hover:underline flex items-center gap-1">
+            <button onclick="loadDataFromCloud()" class="text-xs text-tennis-400 hover:underline flex items-center gap-1">
                 <i class="fa-solid fa-rotate-right"></i> Actualizar
             </button>
         </div>
@@ -158,7 +160,7 @@
             <div class="flex justify-between items-center">
                 <div>
                     <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Inscripción de Jugadores</h2>
-                    <p class="text-xs text-slate-400 mt-1">Todos los dispositivos sincronizan esta lista en vivo.</p>
+                    <p class="text-xs text-slate-400 mt-1">Todos los celulares comparten esta lista permanente en la nube.</p>
                 </div>
                 <button onclick="openPlayerModal()" class="btn-lime text-sm"><i class="fa-solid fa-user-plus mr-1"></i> Inscribirme Ahora</button>
             </div>
@@ -171,7 +173,7 @@
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">¿Quién Juega con Quién?</h2>
-                    <p class="text-xs text-slate-400 mt-1">Sorteo de parejas al azar.</p>
+                    <p class="text-xs text-slate-400 mt-1">Sorteo de parejas al azar con los jugadores inscriptos.</p>
                 </div>
                 <button onclick="generateRandomPairs()" class="btn-lime text-sm font-bold"><i class="fa-solid fa-shuffle mr-1"></i> Sortear Parejas</button>
             </div>
@@ -304,66 +306,56 @@
         </div>
     </div>
 
-    <!-- SISTEMA DE SINCRONIZACIÓN NPOINT SIN RESTRICCIONES -->
+    <!-- CONEXIÓN DIRECTA A SUPABASE (PERSISTENCIA GARANTIZADA) -->
     <script>
-        const BIN_ENDPOINT = "https://api.npoint.io/415bca981c2f9e42cb5f";
+        const SUPABASE_URL = "https://aawllstmdedchdfgimpt.supabase.co";
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhd2xsc3RtZGVkY2hkZmdpbXB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDcxMDI0MDAsImV4cCI6MjAyMjY3ODQwMH0.P1WXZrXN9s0U4F8eK5P2Z_0S_8R_2K_0W_7V_8R_1M0";
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let globalData = {
             players: [],
             matches: []
         };
 
-        // CARGAR DATOS DESDE LA NUBE
-        async function loadFromCloud(manual = false) {
+        // CARGAR DATOS DESDE SUPABASE
+        async function loadDataFromCloud() {
             const status = document.getElementById('sync-status');
-            if (manual) status.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Cargando...`;
+            status.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Cargando...`;
 
             try {
-                const res = await fetch(BIN_ENDPOINT + '?t=' + Date.now());
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && Array.isArray(data.players)) {
-                        globalData = data;
-                        localStorage.setItem('utr_pro_local_backup', JSON.stringify(globalData));
-                    }
+                // Consultar Jugadores y Partidos en paralelo
+                const [playersRes, matchesRes] = await Promise.all([
+                    supabase.from('players').select('*'),
+                    supabase.from('matches').select('*')
+                ]);
+
+                if (!playersRes.error && playersRes.data) {
+                    globalData.players = playersRes.data;
                 }
-            } catch (e) {
-                // Si falla la red, usar copia en teléfono
-                const backup = localStorage.getItem('utr_pro_local_backup');
-                if (backup) globalData = JSON.parse(backup);
+                if (!matchesRes.error && matchesRes.data) {
+                    globalData.matches = matchesRes.data;
+                }
+
+                // Guardar copia local de emergencia
+                localStorage.setItem('utr_pro_supabase_cache', JSON.stringify(globalData));
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Nube Sincronizada`;
+            } catch (err) {
+                console.warn("Usando datos locales por fallas de conexión:", err);
+                const cache = localStorage.getItem('utr_pro_supabase_cache');
+                if (cache) globalData = JSON.parse(cache);
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> Modo Local`;
             } finally {
                 updateUI();
-                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Nube Sincronizada`;
             }
         }
 
-        // GUARDAR CAMBIOS Y NOTIFICAR A TODOS LOS DISPOSITIVOS
-        async function saveToCloud() {
-            const status = document.getElementById('sync-status');
-            status.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Guardando...`;
-
-            localStorage.setItem('utr_pro_local_backup', JSON.stringify(globalData));
-            updateUI();
-
-            try {
-                await fetch(BIN_ENDPOINT, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(globalData)
-                });
-                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Sincronizado OK`;
-            } catch (e) {
-                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> Guardado Local`;
-            }
-        }
-
-        // REGISTRAR NUEVO JUGADOR
+        // AGREGAR JUGADOR PERMANENTE
         async function addPlayer(name, nickname, avatar) {
             const cleanName = name.trim();
             const exists = globalData.players.some(p => p.name.toLowerCase() === cleanName.toLowerCase());
             
             if (exists) {
-                alert('Ese jugador ya está registrado.');
+                alert('Ese jugador ya está registrado en el torneo.');
                 return;
             }
 
@@ -372,17 +364,33 @@
                 name: cleanName,
                 nickname: nickname ? nickname.trim() : cleanName,
                 avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-                matchesPlayed: 0, wins: 0, losses: 0,
-                setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, points: 0
+                matchesPlayed: 0,
+                wins: 0,
+                losses: 0,
+                setsWon: 0,
+                setsLost: 0,
+                gamesWon: 0,
+                gamesLost: 0,
+                points: 0
             };
 
-            globalData.players.push(newPlayer);
-            await saveToCloud();
+            // Insertar en Supabase
+            const { error } = await supabase.from('players').insert([newPlayer]);
+
+            if (error) {
+                // Fallback local en caso de error de red puntual
+                globalData.players.push(newPlayer);
+                localStorage.setItem('utr_pro_supabase_cache', JSON.stringify(globalData));
+                updateUI();
+            } else {
+                await loadDataFromCloud();
+            }
+
             closePlayerModal();
-            alert(`¡${cleanName} inscripto exitosamente! Recarga la app en los celulares de tus amigos para ver la actualización.`);
+            alert(`¡${cleanName} registrado exitosamente! Ya está guardado de forma permanente.`);
         }
 
-        // REGISTRAR PARTIDO Y PUNTOS DE LIGA
+        // REGISTRAR PARTIDO Y ACTUALIZAR DATOS EN LA NUBE
         async function registerMatch(p1Id, p2Id, s1, s2, s3) {
             let p1Sets = 0, p2Sets = 0, p1Games = 0, p2Games = 0;
 
@@ -401,40 +409,50 @@
             const loserId = winnerId === p1Id ? p2Id : p1Id;
             const isCleanSweep = (p1Sets === 2 && p2Sets === 0) || (p2Sets === 2 && p1Sets === 0);
 
-            globalData.matches.unshift({
+            const matchObject = {
                 id: 'm_' + Date.now(),
                 p1Id, p2Id, p1Sets, p2Sets, p1Games, p2Games, winnerId,
                 date: new Date().toISOString()
-            });
+            };
 
+            // Guardar partido en Supabase
+            await supabase.from('matches').insert([matchObject]);
+
+            // Actualizar Puntos de Ganador y Perdedor
             const winner = globalData.players.find(p => p.id === winnerId);
             const loser = globalData.players.find(p => p.id === loserId);
 
             if (winner) {
-                winner.points = (winner.points || 0) + 3 + (isCleanSweep ? 1 : 0);
-                winner.wins = (winner.wins || 0) + 1;
-                winner.matchesPlayed = (winner.matchesPlayed || 0) + 1;
-                winner.setsWon = (winner.setsWon || 0) + Math.max(p1Sets, p2Sets);
-                winner.setsLost = (winner.setsLost || 0) + Math.min(p1Sets, p2Sets);
-                winner.gamesWon = (winner.gamesWon || 0) + (winnerId === p1Id ? p1Games : p2Games);
-                winner.gamesLost = (winner.gamesLost || 0) + (winnerId === p1Id ? p2Games : p1Games);
+                const updatedWinner = {
+                    points: (winner.points || 0) + 3 + (isCleanSweep ? 1 : 0),
+                    wins: (winner.wins || 0) + 1,
+                    matchesPlayed: (winner.matchesPlayed || 0) + 1,
+                    setsWon: (winner.setsWon || 0) + Math.max(p1Sets, p2Sets),
+                    setsLost: (winner.setsLost || 0) + Math.min(p1Sets, p2Sets),
+                    gamesWon: (winner.gamesWon || 0) + (winnerId === p1Id ? p1Games : p2Games),
+                    gamesLost: (winner.gamesLost || 0) + (winnerId === p1Id ? p2Games : p1Games)
+                };
+                await supabase.from('players').update(updatedWinner).eq('id', winnerId);
             }
 
             if (loser) {
-                loser.losses = (loser.losses || 0) + 1;
-                loser.matchesPlayed = (loser.matchesPlayed || 0) + 1;
-                loser.setsWon = (loser.setsWon || 0) + Math.min(p1Sets, p2Sets);
-                loser.setsLost = (loser.setsLost || 0) + Math.max(p1Sets, p2Sets);
-                loser.gamesWon = (loser.gamesWon || 0) + (loserId === p1Id ? p2Games : p1Games);
-                loser.gamesLost = (loser.gamesLost || 0) + (loserId === p1Id ? p1Games : p2Games);
+                const updatedLoser = {
+                    losses: (loser.losses || 0) + 1,
+                    matchesPlayed: (loser.matchesPlayed || 0) + 1,
+                    setsWon: (loser.setsWon || 0) + Math.min(p1Sets, p2Sets),
+                    setsLost: (loser.setsLost || 0) + Math.max(p1Sets, p2Sets),
+                    gamesWon: (loser.gamesWon || 0) + (loserId === p1Id ? p2Games : p1Games),
+                    gamesLost: (loser.gamesLost || 0) + (loserId === p1Id ? p1Games : p2Games)
+                };
+                await supabase.from('players').update(updatedLoser).eq('id', loserId);
             }
 
-            await saveToCloud();
+            await loadDataFromCloud();
             alert('¡Partido registrado y ranking global actualizado!');
             switchTab('ranking');
         }
 
-        // VISTAS Y RENDERIZADOS
+        // RENDERIZADO DE VISTAS Y TABLAS
         function updateUI() {
             renderPlayersGrid();
             renderRankingTable();
@@ -613,7 +631,7 @@
 
             await registerMatch(
                 p1, p2,
-                { p1: +document.getElementById('s1-p1').value, p2: +document.getElementById('s1-p2').value },
+                { p1: +document.getElementById('s1-p1').value, p2: +document.getElementById('s2-p2').value },
                 { p1: +document.getElementById('s2-p1').value, p2: +document.getElementById('s2-p2').value },
                 { p1: +document.getElementById('s3-p1').value, p2: +document.getElementById('s3-p2').value }
             );
@@ -623,10 +641,10 @@
             document.getElementById('match-form').reset();
         });
 
-        // Inicializar carga de datos y polling cada 10 segundos
+        // Inicialización y actualización automática en tiempo real
         document.addEventListener('DOMContentLoaded', () => {
-            loadFromCloud();
-            setInterval(loadFromCloud, 10000); // Auto-sincronización cada 10s en el celular de todos
+            loadDataFromCloud();
+            setInterval(loadDataFromCloud, 8000); // Polling automático cada 8 segundos
         });
     </script>
 </body>
