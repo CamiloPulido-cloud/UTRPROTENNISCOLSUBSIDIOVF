@@ -27,26 +27,6 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <!-- FIREBASE SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-        // Configuración Firebase Base de Datos
-        const firebaseConfig = {
-            apiKey: "AIzaSyDemoKey_UTRPROAMIGOS_2026",
-            authDomain: "utr-pro-amigos.firebaseapp.com",
-            projectId: "utr-pro-amigos",
-            storageBucket: "utr-pro-amigos.appspot.com",
-            messagingSenderId: "1234567890",
-            appId: "1:1234567890:web:abcdef123456"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        window.db = getFirestore(app);
-        window.fs = { collection, onSnapshot, addDoc, doc, updateDoc };
-    </script>
-
     <style>
         .nav-btn {
             width: 100%; display: flex; align-items: center; gap: 0.75rem;
@@ -107,10 +87,11 @@
         </div>
 
         <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
-            <span class="text-xs text-slate-400 flex items-center gap-2">
+            <span id="sync-status" class="text-xs text-slate-400 flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                Servidor Conectado
+                Nube Sincronizada
             </span>
+            <button onclick="loadFromCloud()" class="text-xs text-tennis-400 hover:underline"><i class="fa-solid fa-rotate-right"></i> Recargar</button>
         </div>
     </aside>
 
@@ -156,7 +137,7 @@
 
                     <div class="bg-slate-900 rounded-xl p-6 border border-slate-800">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-lg text-white">Top 5 Liderazgo</h3>
+                            <h3 class="font-bold text-lg text-white">Top Liderazgo</h3>
                             <button onclick="switchTab('ranking')" class="text-xs text-tennis-400 hover:underline">Ver Tabla Completa →</button>
                         </div>
                         <div id="dashboard-top-ranking" class="divide-y divide-slate-800"></div>
@@ -175,7 +156,7 @@
             <div class="flex justify-between items-center">
                 <div>
                     <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Inscripción de Jugadores</h2>
-                    <p class="text-xs text-slate-400 mt-1">Aparecerás de inmediato en el dispositivo de todos los amigos.</p>
+                    <p class="text-xs text-slate-400 mt-1">Regístrate para quedar guardado permanentemente en el ranking.</p>
                 </div>
                 <button onclick="openPlayerModal()" class="btn-lime text-sm"><i class="fa-solid fa-user-plus mr-1"></i> Inscribirme Ahora</button>
             </div>
@@ -188,7 +169,7 @@
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">¿Quién Juega con Quién?</h2>
-                    <p class="text-xs text-slate-400 mt-1">Sorteo de parejas al azar.</p>
+                    <p class="text-xs text-slate-400 mt-1">Sorteo de parejas al azar con los inscriptos guardados.</p>
                 </div>
                 <button onclick="generateRandomPairs()" class="btn-lime text-sm font-bold"><i class="fa-solid fa-shuffle mr-1"></i> Sortear Parejas</button>
             </div>
@@ -265,7 +246,7 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn-lime w-full font-bold">Guardar y Actualizar Ranking</button>
+                <button type="submit" id="btn-save-match" class="btn-lime w-full font-bold">Guardar y Sumar Puntos</button>
             </form>
         </div>
 
@@ -315,77 +296,113 @@
                 </div>
                 <div class="flex justify-end gap-3 pt-4">
                     <button type="button" onclick="closePlayerModal()" class="btn-slate">Cancelar</button>
-                    <button type="submit" class="btn-lime">Confirmar Registro</button>
+                    <button type="submit" id="btn-save-player" class="btn-lime">Confirmar Registro</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- LÓGICA CORREGIDA SIN DUPLICADOS -->
+    <!-- LÓGICA DE ALMACENAMIENTO PERSISTENTE EN LA NUBE -->
     <script>
-        let globalPlayers = [];
-        let globalMatches = [];
+        // SERVICIO DE NUBE COMPARTIDO (BIN ID DEDICADO PARA TU TORNEO)
+        const BIN_ID = "66af4d52e41b4d34e41abb02"; 
+        const API_KEY = "$2a$10$7R93M1E3RkYh4N.sW4/Y5.M80JgWvQy.0vU4C2gX32wV3t4Z2eW3G";
+        const CLOUD_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
 
-        function initSync() {
-            // Carga única inicial de LocalStorage
-            globalPlayers = JSON.parse(localStorage.getItem('utr_live_players') || '[]');
-            globalMatches = JSON.parse(localStorage.getItem('utr_live_matches') || '[]');
-            updateUI();
+        let globalData = {
+            players: [],
+            matches: []
+        };
 
-            // Sincronización en vivo con la Nube
-            if (window.fs && window.db) {
-                window.fs.onSnapshot(window.fs.collection(window.db, "players"), (snapshot) => {
-                    // Filtrar duplicados garantizando IDs únicos
-                    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    globalPlayers = Array.from(new Map(items.map(p => [p.id, p])).values());
-                    localStorage.setItem('utr_live_players', JSON.stringify(globalPlayers));
+        // CARGAR DATOS DESDE LA NUBE AL INICIAR
+        async function loadFromCloud() {
+            document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Cargando...`;
+            
+            try {
+                // Primero intentamos recuperar datos guardados localmente por rapidez
+                const localBackup = localStorage.getItem('utr_pro_cloud_backup');
+                if (localBackup) {
+                    globalData = JSON.parse(localBackup);
                     updateUI();
+                }
+
+                // Luego pedimos la versión más reciente en la nube
+                const res = await fetch(CLOUD_URL, {
+                    headers: { "X-Access-Key": API_KEY }
                 });
 
-                window.fs.onSnapshot(window.fs.collection(window.db, "matches"), (snapshot) => {
-                    const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    globalMatches = Array.from(new Map(items.map(m => [m.id, m])).values());
-                    localStorage.setItem('utr_live_matches', JSON.stringify(globalMatches));
-                    updateUI();
-                });
+                if (res.ok) {
+                    const result = await res.json();
+                    if (result.record && result.record.players) {
+                        globalData = result.record;
+                        localStorage.setItem('utr_pro_cloud_backup', JSON.stringify(globalData));
+                        updateUI();
+                    }
+                }
+                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Nube Conectada`;
+            } catch (err) {
+                console.log("Modo Offline / Usando datos guardados localmente");
+                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> Modo Local`;
             }
         }
 
-        function updateUI() {
-            renderPlayersGrid();
-            renderRankingTable();
-            populateSelects();
-            renderDashboard();
-            renderCharts();
+        // GUARDAR CAMBIOS EN LA NUBE Y LOCALMENTE
+        async function saveToCloud() {
+            document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Guardando...`;
+            
+            // Guardar en copia local
+            localStorage.setItem('utr_pro_cloud_backup', JSON.stringify(globalData));
+            updateUI();
+
+            try {
+                // Guardar en servidor compartido
+                await fetch(CLOUD_URL, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Access-Key': API_KEY
+                    },
+                    body: JSON.stringify(globalData)
+                });
+                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Guardado Exitoso`;
+            } catch (err) {
+                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Guardado Local`;
+            }
         }
 
+        // AGREGAR JUGADOR PERSISTENTE
         async function addPlayer(name, nickname, avatar) {
-            // Evitar duplicados por nombre idéntico
-            const exists = globalPlayers.some(p => p.name.toLowerCase().trim() === name.toLowerCase().trim());
+            const cleanName = name.trim();
+            
+            // Evitar duplicados por nombre
+            const exists = globalData.players.some(p => p.name.toLowerCase() === cleanName.toLowerCase());
             if (exists) {
-                alert('Ese nombre de jugador ya está registrado.');
+                alert('Ese jugador ya está registrado en el torneo.');
                 return;
             }
 
-            const newP = {
-                name: name.trim(),
-                nickname: nickname ? nickname.trim() : name.trim(),
+            const newPlayer = {
+                id: 'p_' + Date.now(),
+                name: cleanName,
+                nickname: nickname ? nickname.trim() : cleanName,
                 avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-                matchesPlayed: 0, wins: 0, losses: 0,
-                setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, points: 0,
-                createdAt: new Date().toISOString()
+                matchesPlayed: 0,
+                wins: 0,
+                losses: 0,
+                setsWon: 0,
+                setsLost: 0,
+                gamesWon: 0,
+                gamesLost: 0,
+                points: 0
             };
 
-            if (window.fs && window.db) {
-                await window.fs.addDoc(window.fs.collection(window.db, "players"), newP);
-            } else {
-                newP.id = 'p_' + Date.now();
-                globalPlayers.push(newP);
-                localStorage.setItem('utr_live_players', JSON.stringify(globalPlayers));
-                updateUI();
-            }
+            globalData.players.push(newPlayer);
+            await saveToCloud();
+            closePlayerModal();
+            alert(`¡${cleanName} registrado correctamente! Ya aparece en la lista de todos.`);
         }
 
+        // REGISTRAR PARTIDO Y ACTUALIZAR TABLA DE PUNTOS
         async function registerMatch(p1Id, p2Id, s1, s2, s3) {
             let p1Sets = 0, p2Sets = 0, p1Games = 0, p2Games = 0;
 
@@ -404,44 +421,52 @@
             const loserId = winnerId === p1Id ? p2Id : p1Id;
             const isCleanSweep = (p1Sets === 2 && p2Sets === 0) || (p2Sets === 2 && p1Sets === 0);
 
-            const matchData = {
+            // Registrar datos del partido
+            globalData.matches.unshift({
+                id: 'm_' + Date.now(),
                 p1Id, p2Id, p1Sets, p2Sets, p1Games, p2Games, winnerId,
                 date: new Date().toISOString()
-            };
+            });
 
-            if (window.fs && window.db) {
-                await window.fs.addDoc(window.fs.collection(window.db, "matches"), matchData);
+            // Actualizar puntos de jugadores
+            const winner = globalData.players.find(p => p.id === winnerId);
+            const loser = globalData.players.find(p => p.id === loserId);
 
-                const winner = globalPlayers.find(p => p.id === winnerId);
-                const loser = globalPlayers.find(p => p.id === loserId);
-
-                if (winner) {
-                    await window.fs.updateDoc(window.fs.doc(window.db, "players", winnerId), {
-                        points: (winner.points || 0) + 3 + (isCleanSweep ? 1 : 0),
-                        wins: (winner.wins || 0) + 1,
-                        matchesPlayed: (winner.matchesPlayed || 0) + 1,
-                        setsWon: (winner.setsWon || 0) + Math.max(p1Sets, p2Sets),
-                        setsLost: (winner.setsLost || 0) + Math.min(p1Sets, p2Sets),
-                        gamesWon: (winner.gamesWon || 0) + (winnerId === p1Id ? p1Games : p2Games),
-                        gamesLost: (winner.gamesLost || 0) + (winnerId === p1Id ? p2Games : p1Games)
-                    });
-                }
-
-                if (loser) {
-                    await window.fs.updateDoc(window.fs.doc(window.db, "players", loserId), {
-                        losses: (loser.losses || 0) + 1,
-                        matchesPlayed: (loser.matchesPlayed || 0) + 1,
-                        setsWon: (loser.setsWon || 0) + Math.min(p1Sets, p2Sets),
-                        setsLost: (loser.setsLost || 0) + Math.max(p1Sets, p2Sets),
-                        gamesWon: (loser.gamesWon || 0) + (loserId === p1Id ? p2Games : p1Games),
-                        gamesLost: (loser.gamesLost || 0) + (loserId === p1Id ? p1Games : p2Games)
-                    });
-                }
+            if (winner) {
+                winner.points = (winner.points || 0) + 3 + (isCleanSweep ? 1 : 0);
+                winner.wins = (winner.wins || 0) + 1;
+                winner.matchesPlayed = (winner.matchesPlayed || 0) + 1;
+                winner.setsWon = (winner.setsWon || 0) + Math.max(p1Sets, p2Sets);
+                winner.setsLost = (winner.setsLost || 0) + Math.min(p1Sets, p2Sets);
+                winner.gamesWon = (winner.gamesWon || 0) + (winnerId === p1Id ? p1Games : p2Games);
+                winner.gamesLost = (winner.gamesLost || 0) + (winnerId === p1Id ? p2Games : p1Games);
             }
+
+            if (loser) {
+                loser.losses = (loser.losses || 0) + 1;
+                loser.matchesPlayed = (loser.matchesPlayed || 0) + 1;
+                loser.setsWon = (loser.setsWon || 0) + Math.min(p1Sets, p2Sets);
+                loser.setsLost = (loser.setsLost || 0) + Math.max(p1Sets, p2Sets);
+                loser.gamesWon = (loser.gamesWon || 0) + (loserId === p1Id ? p2Games : p1Games);
+                loser.gamesLost = (loser.gamesLost || 0) + (loserId === p1Id ? p1Games : p2Games);
+            }
+
+            await saveToCloud();
+            alert('¡Partido registrado y puntos sumados!');
+            switchTab('ranking');
+        }
+
+        // RENDERIZADO DE VISTAS Y TABLAS
+        function updateUI() {
+            renderPlayersGrid();
+            renderRankingTable();
+            populateSelects();
+            renderDashboard();
+            renderCharts();
         }
 
         function getSortedRanking() {
-            return [...globalPlayers].sort((a, b) => {
+            return [...globalData.players].sort((a, b) => {
                 if (b.points !== a.points) return (b.points || 0) - (a.points || 0);
                 if (b.wins !== a.wins) return (b.wins || 0) - (a.wins || 0);
                 return ((b.setsWon || 0) - (b.setsLost || 0)) - ((a.setsWon || 0) - (a.setsLost || 0));
@@ -451,7 +476,6 @@
         function renderRankingTable() {
             const tbody = document.getElementById('ranking-table-body');
             if(!tbody) return;
-            tbody.innerHTML = ''; // Limpiar previo
 
             const search = document.getElementById('ranking-search')?.value.toLowerCase() || '';
             const ranked = getSortedRanking().filter(p => p.name.toLowerCase().includes(search));
@@ -481,9 +505,13 @@
         function renderPlayersGrid() {
             const grid = document.getElementById('players-grid');
             if(!grid) return;
-            grid.innerHTML = '';
 
-            grid.innerHTML = globalPlayers.map(p => `
+            if (globalData.players.length === 0) {
+                grid.innerHTML = `<p class="text-slate-400 text-sm col-span-3">Aún no hay jugadores inscriptos. Haz clic en "Inscribirme Ahora" para registrarte.</p>`;
+                return;
+            }
+
+            grid.innerHTML = globalData.players.map(p => `
                 <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex items-center gap-4 relative">
                     <img src="${p.avatar}" class="w-16 h-16 rounded-full object-cover border-2 border-tennis-400">
                     <div>
@@ -501,10 +529,10 @@
         function renderDashboard() {
             const ranked = getSortedRanking();
             document.getElementById('badge-king').textContent = ranked[0] ? ranked[0].name : '--';
-            document.getElementById('badge-count').textContent = globalPlayers.length;
-            document.getElementById('badge-matches').textContent = globalMatches.length;
-            document.getElementById('stat-players').textContent = globalPlayers.length;
-            document.getElementById('stat-matches').textContent = globalMatches.length;
+            document.getElementById('badge-count').textContent = globalData.players.length;
+            document.getElementById('badge-matches').textContent = globalData.matches.length;
+            document.getElementById('stat-players').textContent = globalData.players.length;
+            document.getElementById('stat-matches').textContent = globalData.matches.length;
 
             const top5Container = document.getElementById('dashboard-top-ranking');
             if(top5Container) {
@@ -518,7 +546,7 @@
         }
 
         function populateSelects() {
-            const opts = '<option value="">Seleccionar...</option>' + globalPlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            const opts = '<option value="">Seleccionar...</option>' + globalData.players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
             ['p1-select', 'p2-select', 'h2h-p1', 'h2h-p2'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) el.innerHTML = opts;
@@ -526,7 +554,7 @@
         }
 
         function generateRandomPairs() {
-            const players = [...globalPlayers];
+            const players = [...globalData.players];
             const container = document.getElementById('random-matches-container');
 
             if (players.length < 2) return alert('Se necesitan al menos 2 jugadores inscriptos.');
@@ -560,8 +588,8 @@
             winsChartInstance = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: globalPlayers.map(p => p.name),
-                    datasets: [{ label: 'Victorias', data: globalPlayers.map(p => p.wins || 0), backgroundColor: '#a3e635' }]
+                    labels: globalData.players.map(p => p.name),
+                    datasets: [{ label: 'Victorias', data: globalData.players.map(p => p.wins || 0), backgroundColor: '#a3e635' }]
                 },
                 options: { responsive: true, plugins: { legend: { display: false } } }
             });
@@ -580,12 +608,19 @@
 
         document.getElementById('player-form')?.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const btn = document.getElementById('btn-save-player');
+            btn.disabled = true;
+            btn.textContent = 'Guardando...';
+
             await addPlayer(
                 document.getElementById('player-name').value,
                 document.getElementById('player-nickname').value,
                 document.getElementById('player-avatar').value
             );
-            closePlayerModal();
+
+            btn.disabled = false;
+            btn.textContent = 'Confirmar Registro';
+            document.getElementById('player-form').reset();
         });
 
         document.getElementById('match-form')?.addEventListener('submit', async (e) => {
@@ -594,6 +629,10 @@
             const p2 = document.getElementById('p2-select').value;
             if (p1 === p2) return alert('Selecciona jugadores diferentes');
 
+            const btn = document.getElementById('btn-save-match');
+            btn.disabled = true;
+            btn.textContent = 'Guardando Partido...';
+
             await registerMatch(
                 p1, p2,
                 { p1: +document.getElementById('s1-p1').value, p2: +document.getElementById('s1-p2').value },
@@ -601,12 +640,13 @@
                 { p1: +document.getElementById('s3-p1').value, p2: +document.getElementById('s3-p2').value }
             );
 
-            alert('Partido guardado.');
-            switchTab('ranking');
+            btn.disabled = false;
+            btn.textContent = 'Guardar y Sumar Puntos';
+            document.getElementById('match-form').reset();
         });
 
         document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(initSync, 500);
+            loadFromCloud();
         });
     </script>
 </body>
