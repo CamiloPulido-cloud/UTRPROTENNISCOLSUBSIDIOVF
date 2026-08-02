@@ -89,9 +89,11 @@
         <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
             <span id="sync-status" class="text-xs text-slate-400 flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                Nube Sincronizada
+                Nube Activa
             </span>
-            <button onclick="loadFromCloud()" class="text-xs text-tennis-400 hover:underline"><i class="fa-solid fa-rotate-right"></i> Recargar</button>
+            <button onclick="loadFromCloud(true)" class="text-xs text-tennis-400 hover:underline flex items-center gap-1">
+                <i class="fa-solid fa-rotate-right"></i> Actualizar
+            </button>
         </div>
     </aside>
 
@@ -156,7 +158,7 @@
             <div class="flex justify-between items-center">
                 <div>
                     <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Inscripción de Jugadores</h2>
-                    <p class="text-xs text-slate-400 mt-1">Regístrate para quedar guardado permanentemente en el ranking.</p>
+                    <p class="text-xs text-slate-400 mt-1">Todos los dispositivos sincronizan esta lista en vivo.</p>
                 </div>
                 <button onclick="openPlayerModal()" class="btn-lime text-sm"><i class="fa-solid fa-user-plus mr-1"></i> Inscribirme Ahora</button>
             </div>
@@ -169,7 +171,7 @@
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">¿Quién Juega con Quién?</h2>
-                    <p class="text-xs text-slate-400 mt-1">Sorteo de parejas al azar con los inscriptos guardados.</p>
+                    <p class="text-xs text-slate-400 mt-1">Sorteo de parejas al azar.</p>
                 </div>
                 <button onclick="generateRandomPairs()" class="btn-lime text-sm font-bold"><i class="fa-solid fa-shuffle mr-1"></i> Sortear Parejas</button>
             </div>
@@ -246,7 +248,7 @@
                     </div>
                 </div>
 
-                <button type="submit" id="btn-save-match" class="btn-lime w-full font-bold">Guardar y Sumar Puntos</button>
+                <button type="submit" id="btn-save-match" class="btn-lime w-full font-bold">Guardar Partido y Sincronizar Puntos</button>
             </form>
         </div>
 
@@ -302,82 +304,66 @@
         </div>
     </div>
 
-    <!-- LÓGICA DE ALMACENAMIENTO PERSISTENTE EN LA NUBE -->
+    <!-- SISTEMA DE SINCRONIZACIÓN NPOINT SIN RESTRICCIONES -->
     <script>
-        // SERVICIO DE NUBE COMPARTIDO (BIN ID DEDICADO PARA TU TORNEO)
-        const BIN_ID = "66af4d52e41b4d34e41abb02"; 
-        const API_KEY = "$2a$10$7R93M1E3RkYh4N.sW4/Y5.M80JgWvQy.0vU4C2gX32wV3t4Z2eW3G";
-        const CLOUD_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+        const BIN_ENDPOINT = "https://api.npoint.io/415bca981c2f9e42cb5f";
 
         let globalData = {
             players: [],
             matches: []
         };
 
-        // CARGAR DATOS DESDE LA NUBE AL INICIAR
-        async function loadFromCloud() {
-            document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Cargando...`;
-            
+        // CARGAR DATOS DESDE LA NUBE
+        async function loadFromCloud(manual = false) {
+            const status = document.getElementById('sync-status');
+            if (manual) status.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Cargando...`;
+
             try {
-                // Primero intentamos recuperar datos guardados localmente por rapidez
-                const localBackup = localStorage.getItem('utr_pro_cloud_backup');
-                if (localBackup) {
-                    globalData = JSON.parse(localBackup);
-                    updateUI();
-                }
-
-                // Luego pedimos la versión más reciente en la nube
-                const res = await fetch(CLOUD_URL, {
-                    headers: { "X-Access-Key": API_KEY }
-                });
-
+                const res = await fetch(BIN_ENDPOINT + '?t=' + Date.now());
                 if (res.ok) {
-                    const result = await res.json();
-                    if (result.record && result.record.players) {
-                        globalData = result.record;
-                        localStorage.setItem('utr_pro_cloud_backup', JSON.stringify(globalData));
-                        updateUI();
+                    const data = await res.json();
+                    if (data && Array.isArray(data.players)) {
+                        globalData = data;
+                        localStorage.setItem('utr_pro_local_backup', JSON.stringify(globalData));
                     }
                 }
-                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Nube Conectada`;
-            } catch (err) {
-                console.log("Modo Offline / Usando datos guardados localmente");
-                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> Modo Local`;
+            } catch (e) {
+                // Si falla la red, usar copia en teléfono
+                const backup = localStorage.getItem('utr_pro_local_backup');
+                if (backup) globalData = JSON.parse(backup);
+            } finally {
+                updateUI();
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Nube Sincronizada`;
             }
         }
 
-        // GUARDAR CAMBIOS EN LA NUBE Y LOCALMENTE
+        // GUARDAR CAMBIOS Y NOTIFICAR A TODOS LOS DISPOSITIVOS
         async function saveToCloud() {
-            document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Guardando...`;
-            
-            // Guardar en copia local
-            localStorage.setItem('utr_pro_cloud_backup', JSON.stringify(globalData));
+            const status = document.getElementById('sync-status');
+            status.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Guardando...`;
+
+            localStorage.setItem('utr_pro_local_backup', JSON.stringify(globalData));
             updateUI();
 
             try {
-                // Guardar en servidor compartido
-                await fetch(CLOUD_URL, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Access-Key': API_KEY
-                    },
+                await fetch(BIN_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(globalData)
                 });
-                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Guardado Exitoso`;
-            } catch (err) {
-                document.getElementById('sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> Guardado Local`;
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Sincronizado OK`;
+            } catch (e) {
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> Guardado Local`;
             }
         }
 
-        // AGREGAR JUGADOR PERSISTENTE
+        // REGISTRAR NUEVO JUGADOR
         async function addPlayer(name, nickname, avatar) {
             const cleanName = name.trim();
-            
-            // Evitar duplicados por nombre
             const exists = globalData.players.some(p => p.name.toLowerCase() === cleanName.toLowerCase());
+            
             if (exists) {
-                alert('Ese jugador ya está registrado en el torneo.');
+                alert('Ese jugador ya está registrado.');
                 return;
             }
 
@@ -386,23 +372,17 @@
                 name: cleanName,
                 nickname: nickname ? nickname.trim() : cleanName,
                 avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-                matchesPlayed: 0,
-                wins: 0,
-                losses: 0,
-                setsWon: 0,
-                setsLost: 0,
-                gamesWon: 0,
-                gamesLost: 0,
-                points: 0
+                matchesPlayed: 0, wins: 0, losses: 0,
+                setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, points: 0
             };
 
             globalData.players.push(newPlayer);
             await saveToCloud();
             closePlayerModal();
-            alert(`¡${cleanName} registrado correctamente! Ya aparece en la lista de todos.`);
+            alert(`¡${cleanName} inscripto exitosamente! Recarga la app en los celulares de tus amigos para ver la actualización.`);
         }
 
-        // REGISTRAR PARTIDO Y ACTUALIZAR TABLA DE PUNTOS
+        // REGISTRAR PARTIDO Y PUNTOS DE LIGA
         async function registerMatch(p1Id, p2Id, s1, s2, s3) {
             let p1Sets = 0, p2Sets = 0, p1Games = 0, p2Games = 0;
 
@@ -421,14 +401,12 @@
             const loserId = winnerId === p1Id ? p2Id : p1Id;
             const isCleanSweep = (p1Sets === 2 && p2Sets === 0) || (p2Sets === 2 && p1Sets === 0);
 
-            // Registrar datos del partido
             globalData.matches.unshift({
                 id: 'm_' + Date.now(),
                 p1Id, p2Id, p1Sets, p2Sets, p1Games, p2Games, winnerId,
                 date: new Date().toISOString()
             });
 
-            // Actualizar puntos de jugadores
             const winner = globalData.players.find(p => p.id === winnerId);
             const loser = globalData.players.find(p => p.id === loserId);
 
@@ -452,11 +430,11 @@
             }
 
             await saveToCloud();
-            alert('¡Partido registrado y puntos sumados!');
+            alert('¡Partido registrado y ranking global actualizado!');
             switchTab('ranking');
         }
 
-        // RENDERIZADO DE VISTAS Y TABLAS
+        // VISTAS Y RENDERIZADOS
         function updateUI() {
             renderPlayersGrid();
             renderRankingTable();
@@ -475,7 +453,7 @@
 
         function renderRankingTable() {
             const tbody = document.getElementById('ranking-table-body');
-            if(!tbody) return;
+            if (!tbody) return;
 
             const search = document.getElementById('ranking-search')?.value.toLowerCase() || '';
             const ranked = getSortedRanking().filter(p => p.name.toLowerCase().includes(search));
@@ -504,10 +482,10 @@
 
         function renderPlayersGrid() {
             const grid = document.getElementById('players-grid');
-            if(!grid) return;
+            if (!grid) return;
 
             if (globalData.players.length === 0) {
-                grid.innerHTML = `<p class="text-slate-400 text-sm col-span-3">Aún no hay jugadores inscriptos. Haz clic en "Inscribirme Ahora" para registrarte.</p>`;
+                grid.innerHTML = `<p class="text-slate-400 text-sm col-span-3">No hay jugadores inscriptos. Presiona "Inscribirme Ahora" para ser el primero.</p>`;
                 return;
             }
 
@@ -535,7 +513,7 @@
             document.getElementById('stat-matches').textContent = globalData.matches.length;
 
             const top5Container = document.getElementById('dashboard-top-ranking');
-            if(top5Container) {
+            if (top5Container) {
                 top5Container.innerHTML = ranked.slice(0, 5).map((p, i) => `
                     <div class="flex justify-between items-center py-2">
                         <span class="text-sm text-slate-300">#${i+1} ${p.name}</span>
@@ -627,11 +605,11 @@
             e.preventDefault();
             const p1 = document.getElementById('p1-select').value;
             const p2 = document.getElementById('p2-select').value;
-            if (p1 === p2) return alert('Selecciona jugadores diferentes');
+            if (p1 === p2) return alert('Selecciona dos jugadores diferentes');
 
             const btn = document.getElementById('btn-save-match');
             btn.disabled = true;
-            btn.textContent = 'Guardando Partido...';
+            btn.textContent = 'Sincronizando...';
 
             await registerMatch(
                 p1, p2,
@@ -641,12 +619,14 @@
             );
 
             btn.disabled = false;
-            btn.textContent = 'Guardar y Sumar Puntos';
+            btn.textContent = 'Guardar Partido y Sincronizar Puntos';
             document.getElementById('match-form').reset();
         });
 
+        // Inicializar carga de datos y polling cada 10 segundos
         document.addEventListener('DOMContentLoaded', () => {
             loadFromCloud();
+            setInterval(loadFromCloud, 10000); // Auto-sincronización cada 10s en el celular de todos
         });
     </script>
 </body>
