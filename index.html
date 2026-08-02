@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tennis Ranking League | ATP Style</title>
+    <title>UTR PRO AMIGOS | Liga en Tiempo Real</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -13,6 +13,645 @@
                 extend: {
                     colors: {
                         tennis: {
+                            400: '#a3e635',
+                            500: '#84cc16',
+                            600: '#65a30d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- FIREBASE SDKs (Módulo Web de Google) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // CONFIGURACIÓN DE TU BASE DE DATOS EN LA NUBE (FIREBASE)
+        // Puedes reemplazar estas claves por las de tu proyecto propio de Firebase (Gratuito)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDemoKey_UTRPROAMIGOS_2026",
+            authDomain: "utr-pro-amigos.firebaseapp.com",
+            projectId: "utr-pro-amigos",
+            storageBucket: "utr-pro-amigos.appspot.com",
+            messagingSenderId: "1234567890",
+            appId: "1:1234567890:web:abcdef123456"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+        window.fs = { collection, onSnapshot, addDoc, doc, updateDoc, deleteDoc };
+    </script>
+
+    <style>
+        .nav-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem 0.875rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #94a3b8;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover {
+            color: #ffffff;
+            background-color: rgba(30, 41, 59, 0.7);
+        }
+        .nav-btn.active {
+            background-color: rgba(163, 230, 53, 0.1);
+            color: #a3e635;
+            font-weight: 600;
+            border-right: 3px solid #a3e635;
+        }
+        .pro-card {
+            background-color: #0f172a;
+            border: 1px solid rgba(30, 41, 59, 0.8);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+        }
+        .stat-box {
+            background-color: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .input-dark {
+            background-color: #020617;
+            border: 1px solid #1e293b;
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            color: #f8fafc;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-dark:focus {
+            border-color: #a3e635;
+        }
+        .btn-lime {
+            background-color: #a3e635;
+            color: #020617;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+            box-shadow: 0 4px 10px rgba(163, 230, 53, 0.15);
+        }
+        .btn-lime:hover {
+            background-color: #bef264;
+        }
+        .btn-slate {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+        .tab-content {
+            animation: fadeIn 0.25s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col md:flex-row">
+
+    <!-- Sidebar / Navegación -->
+    <aside class="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 p-4 flex flex-col justify-between shrink-0">
+        <div>
+            <div class="flex items-center gap-3 mb-8 px-2">
+                <i class="fa-solid fa-tennis-ball text-tennis-400 text-3xl animate-spin" style="animation-duration: 10s;"></i>
+                <div>
+                    <h1 class="font-black text-xl tracking-wider text-white">UTR PRO</h1>
+                    <span class="text-tennis-400 text-xs block font-bold tracking-widest uppercase">Amigos League Live</span>
+                </div>
+            </div>
+            
+            <nav class="space-y-1" id="main-nav">
+                <button onclick="switchTab('dashboard')" class="nav-btn active" id="btn-dashboard"><i class="fa-solid fa-chart-pie w-6"></i> Dashboard</button>
+                <button onclick="switchTab('players')" class="nav-btn" id="btn-players"><i class="fa-solid fa-user-plus w-6"></i> Registrarse / Jugadores</button>
+                <button onclick="switchTab('random-match')" class="nav-btn" id="btn-random-match"><i class="fa-solid fa-shuffle w-6"></i> Sorteo Aleatorio</button>
+                <hr class="border-slate-800 my-2">
+                <button onclick="switchTab('fixture')" class="nav-btn" id="btn-fixture"><i class="fa-solid fa-calendar-days w-6"></i> Fixture & Fechas</button>
+                <button onclick="switchTab('ranking')" class="nav-btn" id="btn-ranking"><i class="fa-solid fa-trophy w-6"></i> Ranking Individual</button>
+                <button onclick="switchTab('matches')" class="nav-btn" id="btn-matches"><i class="fa-solid fa-calendar-plus w-6"></i> Registrar Partido</button>
+                <button onclick="switchTab('h2h')" class="nav-btn" id="btn-h2h"><i class="fa-solid fa-handshake-simple w-6"></i> Head to Head</button>
+                <button onclick="switchTab('stats')" class="nav-btn" id="btn-stats"><i class="fa-solid fa-chart-line w-6"></i> Estadísticas</button>
+            </nav>
+        </div>
+
+        <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+            <span class="text-xs text-slate-400 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                En Vivo (Nube Sync)
+            </span>
+        </div>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <main class="flex-1 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full space-y-6">
+        
+        <!-- TOP BADGES -->
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="pro-card">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">👑 LÍDER UTR PRO</span>
+                <p id="badge-king" class="text-lg font-bold text-amber-400 mt-1">Cargando...</p>
+            </div>
+            <div class="pro-card">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">🔥 Racha Líder</span>
+                <p id="badge-streak" class="text-lg font-bold text-orange-500 mt-1">--</p>
+            </div>
+            <div class="pro-card">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">🎾 Mayor Efectividad</span>
+                <p id="badge-mvp" class="text-lg font-bold text-tennis-400 mt-1">--</p>
+            </div>
+            <div class="pro-card">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">🏆 Jugadores Activos</span>
+                <p id="badge-count" class="text-lg font-bold text-sky-400 mt-1">0</p>
+            </div>
+        </section>
+
+        <!-- DASHBOARD TAB -->
+        <div id="tab-dashboard" class="tab-content space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 space-y-6">
+                    <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Resumen de la Liga (Sincronizado)</h2>
+                    
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <div class="stat-box">
+                            <span class="text-slate-400 text-sm">Jugadores Inscriptos</span>
+                            <span id="stat-players" class="text-3xl font-black text-tennis-400">0</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="text-slate-400 text-sm">Partidos Registrados</span>
+                            <span id="stat-matches" class="text-3xl font-black text-sky-400">0</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="text-slate-400 text-sm">Efectividad Torneo</span>
+                            <span id="stat-eff" class="text-3xl font-black text-purple-400">0%</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900 rounded-xl p-6 border border-slate-800">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-lg text-white">Top 5 UTR PRO</h3>
+                            <button onclick="switchTab('ranking')" class="text-xs text-tennis-400 hover:underline">Ver Tabla Completa →</button>
+                        </div>
+                        <div id="dashboard-top-ranking" class="divide-y divide-slate-800"></div>
+                    </div>
+                </div>
+
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold border-l-4 border-sky-400 pl-3">Últimos Resultados</h2>
+                    <div id="dashboard-recent-matches" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AGREGAR JUGADOR / LISTA COMPARTIDA -->
+        <div id="tab-players" class="tab-content hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Registrarse en el Torneo</h2>
+                    <p class="text-xs text-slate-400 mt-1">Cualquier amigo registrado aquí aparecerá automáticamente en el celular de todos.</p>
+                </div>
+                <button onclick="openPlayerModal()" class="btn-lime text-sm"><i class="fa-solid fa-user-plus mr-1"></i> Inscribirme Ahora</button>
+            </div>
+
+            <div id="players-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
+        <!-- SORTEO ALEATORIO -->
+        <div id="tab-random-match" class="tab-content hidden space-y-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">¿Quién Juega con Quién? (Sorteo)</h2>
+                    <p class="text-xs text-slate-400 mt-1">Genera cruces aleatorios en tiempo real con los jugadores inscriptos.</p>
+                </div>
+                <button onclick="generateRandomPairs()" class="btn-lime text-sm font-bold"><i class="fa-solid fa-shuffle mr-1"></i> Sortear Parejas</button>
+            </div>
+
+            <div id="random-matches-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <p class="text-slate-400 text-sm col-span-2">Haz clic en "Sortear Parejas" para cruzar a todos los inscriptos.</p>
+            </div>
+        </div>
+
+        <!-- RANKING INDIVIDUAL TAB -->
+        <div id="tab-ranking" class="tab-content hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Ranking Oficial UTR PRO</h2>
+                <input type="text" id="ranking-search" oninput="renderRankingTable()" placeholder="Buscar jugador..." class="input-dark w-48 text-sm">
+            </div>
+
+            <div class="overflow-x-auto bg-slate-900 rounded-xl border border-slate-800">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-800/80 text-slate-400 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="p-4">Pos</th>
+                            <th class="p-4">Jugador</th>
+                            <th class="p-4">PJ</th>
+                            <th class="p-4">G</th>
+                            <th class="p-4">P</th>
+                            <th class="p-4">Sets (Dif)</th>
+                            <th class="p-4">Juegos (Dif)</th>
+                            <th class="p-4">Efectividad</th>
+                            <th class="p-4 font-bold text-tennis-400">Puntos UTR</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ranking-table-body" class="divide-y divide-slate-800 text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- REGISTRAR PARTIDO TAB -->
+        <div id="tab-matches" class="tab-content hidden max-w-2xl mx-auto bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-6">
+            <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Registrar Marcador Oficial</h2>
+            
+            <form id="match-form" class="space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase text-slate-400 mb-2">Jugador A</label>
+                        <select id="p1-select" class="input-dark w-full" required></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase text-slate-400 mb-2">Jugador B</label>
+                        <select id="p2-select" class="input-dark w-full" required></select>
+                    </div>
+                </div>
+
+                <div class="border-t border-b border-slate-800 py-4 space-y-4">
+                    <span class="text-xs uppercase text-slate-400 font-bold tracking-wider block">Sets (Al mejor de 3)</span>
+                    
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm font-semibold w-16">Set 1:</span>
+                        <input type="number" id="s1-p1" min="0" max="7" class="input-dark text-center w-full" placeholder="J1" required>
+                        <span>-</span>
+                        <input type="number" id="s1-p2" min="0" max="7" class="input-dark text-center w-full" placeholder="J2" required>
+                    </div>
+                    
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm font-semibold w-16">Set 2:</span>
+                        <input type="number" id="s2-p1" min="0" max="7" class="input-dark text-center w-full" placeholder="J1" required>
+                        <span>-</span>
+                        <input type="number" id="s2-p2" min="0" max="7" class="input-dark text-center w-full" placeholder="J2" required>
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm font-semibold w-16">Set 3:</span>
+                        <input type="number" id="s3-p1" min="0" max="7" class="input-dark text-center w-full" placeholder="J1">
+                        <span>-</span>
+                        <input type="number" id="s3-p2" min="0" max="7" class="input-dark text-center w-full" placeholder="J2">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-lime w-full font-bold">Guardar Partido (Sincronizar a Todos)</button>
+            </form>
+        </div>
+
+        <!-- HEAD TO HEAD TAB -->
+        <div id="tab-h2h" class="tab-content hidden space-y-6">
+            <h2 class="text-2xl font-bold border-l-4 border-sky-400 pl-3">Head to Head UTR PRO</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">Jugador 1</label>
+                    <select id="h2h-p1" onchange="renderH2H()" class="input-dark w-full"></select>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">Jugador 2</label>
+                    <select id="h2h-p2" onchange="renderH2H()" class="input-dark w-full"></select>
+                </div>
+            </div>
+            <div id="h2h-results" class="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-4"></div>
+        </div>
+
+        <!-- ESTADÍSTICAS TAB -->
+        <div id="tab-stats" class="tab-content hidden space-y-6">
+            <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Estadísticas de la Liga</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                    <h3 class="text-sm font-bold text-slate-400 mb-4">Victorias por Jugador</h3>
+                    <canvas id="chart-wins"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal Registrar Jugador -->
+    <div id="player-modal" class="fixed inset-0 bg-black/70 hidden backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-4">
+            <h3 class="text-xl font-bold text-white">Inscribirse al Torneo</h3>
+            <form id="player-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
+                    <input type="text" id="player-name" class="input-dark w-full" placeholder="Ej: Camilo Pulido" required>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">Apodo</label>
+                    <input type="text" id="player-nickname" class="input-dark w-full" placeholder="Ej: El Mago">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">Foto Avatar (URL opcional)</label>
+                    <input type="url" id="player-avatar" placeholder="https://..." class="input-dark w-full">
+                </div>
+                <div class="flex justify-end gap-3 pt-4">
+                    <button type="button" onclick="closePlayerModal()" class="btn-slate">Cancelar</button>
+                    <button type="submit" class="btn-lime">Confirmar Registro</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- LÓGICA EN TIEMPO REAL CON NUBE Y LOCALSTORAGE -->
+    <script>
+        let globalPlayers = [];
+        let globalMatches = [];
+
+        // SINCRONIZACIÓN EN TIEMPO REAL CON FIREBASE / LOCALSTORAGE
+        function initSync() {
+            // Cargar datos locales de respaldo inmediatamente
+            globalPlayers = JSON.parse(localStorage.getItem('utr_live_players') || '[]');
+            globalMatches = JSON.parse(localStorage.getItem('utr_live_matches') || '[]');
+            updateUI();
+
+            // Suscripción en tiempo real a la nube
+            if (window.fs && window.db) {
+                window.fs.onSnapshot(window.fs.collection(window.db, "players"), (snapshot) => {
+                    globalPlayers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    localStorage.setItem('utr_live_players', JSON.stringify(globalPlayers));
+                    updateUI();
+                });
+
+                window.fs.onSnapshot(window.fs.collection(window.db, "matches"), (snapshot) => {
+                    globalMatches = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    localStorage.setItem('utr_live_matches', JSON.stringify(globalMatches));
+                    updateUI();
+                });
+            }
+        }
+
+        function updateUI() {
+            renderPlayersGrid();
+            renderRankingTable();
+            populateSelects();
+            renderDashboard();
+            renderCharts();
+        }
+
+        // AGREGAR JUGADOR
+        async function addPlayer(name, nickname, avatar) {
+            const newP = {
+                name,
+                nickname: nickname || name,
+                avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+                matchesPlayed: 0, wins: 0, losses: 0,
+                setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, points: 0,
+                createdAt: new Date().toISOString()
+            };
+
+            if (window.fs && window.db) {
+                await window.fs.addDoc(window.fs.collection(window.db, "players"), newP);
+            } else {
+                newP.id = 'p_' + Date.now();
+                globalPlayers.push(newP);
+                localStorage.setItem('utr_live_players', JSON.stringify(globalPlayers));
+                updateUI();
+            }
+        }
+
+        // REGISTRAR PARTIDO
+        async function registerMatch(p1Id, p2Id, s1, s2, s3) {
+            let p1Sets = 0, p2Sets = 0, p1Games = 0, p2Games = 0;
+
+            if (s1.p1 > s1.p2) p1Sets++; else p2Sets++;
+            p1Games += s1.p1; p2Games += s1.p2;
+
+            if (s2.p1 > s2.p2) p1Sets++; else p2Sets++;
+            p1Games += s2.p1; p2Games += s2.p2;
+
+            if (s3 && (s3.p1 > 0 || s3.p2 > 0)) {
+                if (s3.p1 > s3.p2) p1Sets++; else p2Sets++;
+                p1Games += s3.p1; p2Games += s3.p2;
+            }
+
+            const winnerId = p1Sets > p2Sets ? p1Id : p2Id;
+            const loserId = winnerId === p1Id ? p2Id : p1Id;
+            const isCleanSweep = (p1Sets === 2 && p2Sets === 0) || (p2Sets === 2 && p1Sets === 0);
+
+            const matchData = {
+                p1Id, p2Id, p1Sets, p2Sets, p1Games, p2Games, winnerId,
+                date: new Date().toISOString()
+            };
+
+            if (window.fs && window.db) {
+                await window.fs.addDoc(window.fs.collection(window.db, "matches"), matchData);
+
+                // Actualizar puntuación de ambos en la nube
+                const winner = globalPlayers.find(p => p.id === winnerId);
+                const loser = globalPlayers.find(p => p.id === loserId);
+
+                if (winner) {
+                    const wRef = window.fs.doc(window.db, "players", winnerId);
+                    await window.fs.updateDoc(wRef, {
+                        points: (winner.points || 0) + 3 + (isCleanSweep ? 1 : 0),
+                        wins: (winner.wins || 0) + 1,
+                        matchesPlayed: (winner.matchesPlayed || 0) + 1,
+                        setsWon: (winner.setsWon || 0) + Math.max(p1Sets, p2Sets),
+                        setsLost: (winner.setsLost || 0) + Math.min(p1Sets, p2Sets),
+                        gamesWon: (winner.gamesWon || 0) + (winnerId === p1Id ? p1Games : p2Games),
+                        gamesLost: (winner.gamesLost || 0) + (winnerId === p1Id ? p2Games : p1Games)
+                    });
+                }
+
+                if (loser) {
+                    const lRef = window.fs.doc(window.db, "players", loserId);
+                    await window.fs.updateDoc(lRef, {
+                        losses: (loser.losses || 0) + 1,
+                        matchesPlayed: (loser.matchesPlayed || 0) + 1,
+                        setsWon: (loser.setsWon || 0) + Math.min(p1Sets, p2Sets),
+                        setsLost: (loser.setsLost || 0) + Math.max(p1Sets, p2Sets),
+                        gamesWon: (loser.gamesWon || 0) + (loserId === p1Id ? p2Games : p1Games),
+                        gamesLost: (loser.gamesLost || 0) + (loserId === p1Id ? p1Games : p2Games)
+                    });
+                }
+            }
+        }
+
+        // RENDERIZADO DE TABLAS Y RENDERERS
+        function getSortedRanking() {
+            return [...globalPlayers].sort((a, b) => {
+                if (b.points !== a.points) return (b.points || 0) - (a.points || 0);
+                if (b.wins !== a.wins) return (b.wins || 0) - (a.wins || 0);
+                return ((b.setsWon || 0) - (b.setsLost || 0)) - ((a.setsWon || 0) - (a.setsLost || 0));
+            });
+        }
+
+        function renderRankingTable() {
+            const tbody = document.getElementById('ranking-table-body');
+            const search = document.getElementById('ranking-search')?.value.toLowerCase() || '';
+            const ranked = getSortedRanking().filter(p => p.name.toLowerCase().includes(search));
+
+            tbody.innerHTML = ranked.map((p, idx) => {
+                const eff = p.matchesPlayed > 0 ? (((p.wins || 0) / p.matchesPlayed) * 100).toFixed(1) : '0.0';
+                const setDiff = (p.setsWon || 0) - (p.setsLost || 0);
+                const gameDiff = (p.gamesWon || 0) - (p.gamesLost || 0);
+
+                return `
+                    <tr class="hover:bg-slate-800/50 transition-colors">
+                        <td class="p-4 font-bold ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-600' : 'text-slate-500'}">#${idx + 1}</td>
+                        <td class="p-4 flex items-center gap-3">
+                            <img src="${p.avatar}" class="w-8 h-8 rounded-full object-cover">
+                            <span class="font-bold text-white">${p.name}</span>
+                        </td>
+                        <td class="p-4 text-slate-300">${p.matchesPlayed || 0}</td>
+                        <td class="p-4 text-green-400 font-semibold">${p.wins || 0}</td>
+                        <td class="p-4 text-red-400">${p.losses || 0}</td>
+                        <td class="p-4 text-slate-400">${p.setsWon || 0}-${p.setsLost || 0} (${setDiff > 0 ? '+' : ''}${setDiff})</td>
+                        <td class="p-4 text-slate-400">${p.gamesWon || 0}-${p.gamesLost || 0} (${gameDiff > 0 ? '+' : ''}${gameDiff})</td>
+                        <td class="p-4 font-mono text-slate-300">${eff}%</td>
+                        <td class="p-4 text-tennis-400 font-black text-base">${p.points || 0}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderPlayersGrid() {
+            const grid = document.getElementById('players-grid');
+            grid.innerHTML = globalPlayers.map(p => `
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex items-center gap-4 relative">
+                    <img src="${p.avatar}" class="w-16 h-16 rounded-full object-cover border-2 border-tennis-400">
+                    <div>
+                        <h4 class="font-bold text-white text-lg">${p.name}</h4>
+                        <p class="text-xs text-tennis-400">"${p.nickname}"</p>
+                        <div class="text-xs text-slate-400 mt-2 flex gap-3">
+                            <span>PJ: ${p.matchesPlayed || 0}</span>
+                            <span>Pts UTR: ${p.points || 0}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderDashboard() {
+            const ranked = getSortedRanking();
+            document.getElementById('badge-king').textContent = ranked[0] ? ranked[0].name : 'Sin Inscriptos';
+            document.getElementById('badge-count').textContent = globalPlayers.length;
+            document.getElementById('stat-players').textContent = globalPlayers.length;
+            document.getElementById('stat-matches').textContent = globalMatches.length;
+        }
+
+        function populateSelects() {
+            const opts = '<option value="">Seleccionar...</option>' + globalPlayers.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            ['p1-select', 'p2-select', 'h2h-p1', 'h2h-p2'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = opts;
+            });
+        }
+
+        function generateRandomPairs() {
+            const players = [...globalPlayers];
+            const container = document.getElementById('random-matches-container');
+
+            if (players.length < 2) return alert('Se necesitan al menos 2 jugadores inscriptos.');
+
+            for (let i = players.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [players[i], players[j]] = [players[j], players[i]];
+            }
+
+            let html = '';
+            for (let i = 0; i < players.length; i += 2) {
+                if (i + 1 < players.length) {
+                    html += `
+                        <div class="bg-slate-900 border border-slate-800 p-5 rounded-xl flex items-center justify-between">
+                            <span class="font-bold text-sm text-white">${players[i].name}</span>
+                            <span class="text-xs font-black text-tennis-400 px-2 py-1 bg-slate-800 rounded">VS</span>
+                            <span class="font-bold text-sm text-white">${players[i+1].name}</span>
+                        </div>
+                    `;
+                }
+            }
+            container.innerHTML = html;
+        }
+
+        let winsChartInstance = null;
+        function renderCharts() {
+            const ctx = document.getElementById('chart-wins')?.getContext('2d');
+            if (!ctx) return;
+            if (winsChartInstance) winsChartInstance.destroy();
+
+            winsChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: globalPlayers.map(p => p.name),
+                    datasets: [{ label: 'Victorias', data: globalPlayers.map(p => p.wins || 0), backgroundColor: '#a3e635' }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+            });
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(`tab-${tabId}`)?.classList.remove('hidden');
+            document.getElementById(`btn-${tabId}`)?.classList.add('active');
+        }
+
+        function openPlayerModal() { document.getElementById('player-modal').classList.remove('hidden'); }
+        function closePlayerModal() { document.getElementById('player-modal').classList.add('hidden'); }
+
+        document.getElementById('player-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await addPlayer(
+                document.getElementById('player-name').value,
+                document.getElementById('player-nickname').value,
+                document.getElementById('player-avatar').value
+            );
+            closePlayerModal();
+            alert('¡Registro exitoso! Todos podrán verte en la lista.');
+        });
+
+        document.getElementById('match-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const p1 = document.getElementById('p1-select').value;
+            const p2 = document.getElementById('p2-select').value;
+            if (p1 === p2) return alert('Selecciona jugadores diferentes');
+
+            await registerMatch(
+                p1, p2,
+                { p1: +document.getElementById('s1-p1').value, p2: +document.getElementById('s1-p2').value },
+                { p1: +document.getElementById('s2-p1').value, p2: +document.getElementById('s2-p2').value },
+                { p1: +document.getElementById('s3-p1').value, p2: +document.getElementById('s3-p2').value }
+            );
+
+            alert('Partido registrado y sincronizado en la nube.');
+            switchTab('ranking');
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(initSync, 1000);
+        });
+    </script>
+</body>
+</html>
                             400: '#a3e635',
                             500: '#84cc16',
                             600: '#65a30d',
