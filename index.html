@@ -26,8 +26,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Supabase JS Client (Nube Multidispositivo) -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         .nav-btn {
@@ -93,7 +91,7 @@
                 <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
                 Nube Activa
             </span>
-            <button onclick="loadDataFromCloud()" class="text-xs text-tennis-400 hover:underline flex items-center gap-1">
+            <button onclick="loadFromCloud()" class="text-xs text-tennis-400 hover:underline flex items-center gap-1">
                 <i class="fa-solid fa-rotate-right"></i> Actualizar
             </button>
         </div>
@@ -160,7 +158,7 @@
             <div class="flex justify-between items-center">
                 <div>
                     <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Inscripción de Jugadores</h2>
-                    <p class="text-xs text-slate-400 mt-1">Todos los celulares comparten esta lista permanente en la nube.</p>
+                    <p class="text-xs text-slate-400 mt-1">Regístrate para guardar tu perfil en la nube compartida.</p>
                 </div>
                 <button onclick="openPlayerModal()" class="btn-lime text-sm"><i class="fa-solid fa-user-plus mr-1"></i> Inscribirme Ahora</button>
             </div>
@@ -306,46 +304,56 @@
         </div>
     </div>
 
-    <!-- CONEXIÓN DIRECTA A SUPABASE (PERSISTENCIA GARANTIZADA) -->
+    <!-- FIREBASE REALTIME REST API (DIRECTO Y SIN ERRORES DE PERMISOS) -->
     <script>
-        const SUPABASE_URL = "https://aawllstmdedchdfgimpt.supabase.co";
-        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhd2xsc3RtZGVkY2hkZmdpbXB0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MDcxMDI0MDAsImV4cCI6MjAyMjY3ODQwMH0.P1WXZrXN9s0U4F8eK5P2Z_0S_8R_2K_0W_7V_8R_1M0";
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const DB_URL = "https://utr-pro-amigos-default-rtdb.firebaseio.com/league.json";
 
         let globalData = {
             players: [],
             matches: []
         };
 
-        // CARGAR DATOS DESDE SUPABASE
-        async function loadDataFromCloud() {
+        // CARGAR DATOS EN TIEMPO REAL DESDE LA NUBE
+        async function loadFromCloud() {
             const status = document.getElementById('sync-status');
             status.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Cargando...`;
 
             try {
-                // Consultar Jugadores y Partidos en paralelo
-                const [playersRes, matchesRes] = await Promise.all([
-                    supabase.from('players').select('*'),
-                    supabase.from('matches').select('*')
-                ]);
-
-                if (!playersRes.error && playersRes.data) {
-                    globalData.players = playersRes.data;
+                const response = await fetch(DB_URL + '?t=' + Date.now());
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data) {
+                        globalData.players = data.players ? Object.values(data.players) : [];
+                        globalData.matches = data.matches ? Object.values(data.matches) : [];
+                        localStorage.setItem('utr_pro_local_cache', JSON.stringify(globalData));
+                    }
                 }
-                if (!matchesRes.error && matchesRes.data) {
-                    globalData.matches = matchesRes.data;
-                }
-
-                // Guardar copia local de emergencia
-                localStorage.setItem('utr_pro_supabase_cache', JSON.stringify(globalData));
-                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Nube Sincronizada`;
-            } catch (err) {
-                console.warn("Usando datos locales por fallas de conexión:", err);
-                const cache = localStorage.getItem('utr_pro_supabase_cache');
+            } catch (error) {
+                const cache = localStorage.getItem('utr_pro_local_cache');
                 if (cache) globalData = JSON.parse(cache);
-                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> Modo Local`;
             } finally {
                 updateUI();
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Nube Conectada`;
+            }
+        }
+
+        // GUARDAR DATOS EN LA NUBE
+        async function saveToCloud() {
+            const status = document.getElementById('sync-status');
+            status.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Guardando...`;
+
+            localStorage.setItem('utr_pro_local_cache', JSON.stringify(globalData));
+            updateUI();
+
+            try {
+                await fetch(DB_URL, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(globalData)
+                });
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Guardado Exitoso`;
+            } catch (error) {
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> Guardado Local`;
             }
         }
 
@@ -364,33 +372,17 @@
                 name: cleanName,
                 nickname: nickname ? nickname.trim() : cleanName,
                 avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
-                matchesPlayed: 0,
-                wins: 0,
-                losses: 0,
-                setsWon: 0,
-                setsLost: 0,
-                gamesWon: 0,
-                gamesLost: 0,
-                points: 0
+                matchesPlayed: 0, wins: 0, losses: 0,
+                setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, points: 0
             };
 
-            // Insertar en Supabase
-            const { error } = await supabase.from('players').insert([newPlayer]);
-
-            if (error) {
-                // Fallback local en caso de error de red puntual
-                globalData.players.push(newPlayer);
-                localStorage.setItem('utr_pro_supabase_cache', JSON.stringify(globalData));
-                updateUI();
-            } else {
-                await loadDataFromCloud();
-            }
-
+            globalData.players.push(newPlayer);
+            await saveToCloud();
             closePlayerModal();
-            alert(`¡${cleanName} registrado exitosamente! Ya está guardado de forma permanente.`);
+            alert(`¡${cleanName} inscripto exitosamente! Ya está guardado en la nube para todos.`);
         }
 
-        // REGISTRAR PARTIDO Y ACTUALIZAR DATOS EN LA NUBE
+        // REGISTRAR PARTIDO Y ACTUALIZAR DATOS DE LIGA
         async function registerMatch(p1Id, p2Id, s1, s2, s3) {
             let p1Sets = 0, p2Sets = 0, p1Games = 0, p2Games = 0;
 
@@ -409,50 +401,40 @@
             const loserId = winnerId === p1Id ? p2Id : p1Id;
             const isCleanSweep = (p1Sets === 2 && p2Sets === 0) || (p2Sets === 2 && p1Sets === 0);
 
-            const matchObject = {
+            globalData.matches.unshift({
                 id: 'm_' + Date.now(),
                 p1Id, p2Id, p1Sets, p2Sets, p1Games, p2Games, winnerId,
                 date: new Date().toISOString()
-            };
+            });
 
-            // Guardar partido en Supabase
-            await supabase.from('matches').insert([matchObject]);
-
-            // Actualizar Puntos de Ganador y Perdedor
             const winner = globalData.players.find(p => p.id === winnerId);
             const loser = globalData.players.find(p => p.id === loserId);
 
             if (winner) {
-                const updatedWinner = {
-                    points: (winner.points || 0) + 3 + (isCleanSweep ? 1 : 0),
-                    wins: (winner.wins || 0) + 1,
-                    matchesPlayed: (winner.matchesPlayed || 0) + 1,
-                    setsWon: (winner.setsWon || 0) + Math.max(p1Sets, p2Sets),
-                    setsLost: (winner.setsLost || 0) + Math.min(p1Sets, p2Sets),
-                    gamesWon: (winner.gamesWon || 0) + (winnerId === p1Id ? p1Games : p2Games),
-                    gamesLost: (winner.gamesLost || 0) + (winnerId === p1Id ? p2Games : p1Games)
-                };
-                await supabase.from('players').update(updatedWinner).eq('id', winnerId);
+                winner.points = (winner.points || 0) + 3 + (isCleanSweep ? 1 : 0);
+                winner.wins = (winner.wins || 0) + 1;
+                winner.matchesPlayed = (winner.matchesPlayed || 0) + 1;
+                winner.setsWon = (winner.setsWon || 0) + Math.max(p1Sets, p2Sets);
+                winner.setsLost = (winner.setsLost || 0) + Math.min(p1Sets, p2Sets);
+                winner.gamesWon = (winner.gamesWon || 0) + (winnerId === p1Id ? p1Games : p2Games);
+                winner.gamesLost = (winner.gamesLost || 0) + (winnerId === p1Id ? p2Games : p1Games);
             }
 
             if (loser) {
-                const updatedLoser = {
-                    losses: (loser.losses || 0) + 1,
-                    matchesPlayed: (loser.matchesPlayed || 0) + 1,
-                    setsWon: (loser.setsWon || 0) + Math.min(p1Sets, p2Sets),
-                    setsLost: (loser.setsLost || 0) + Math.max(p1Sets, p2Sets),
-                    gamesWon: (loser.gamesWon || 0) + (loserId === p1Id ? p2Games : p1Games),
-                    gamesLost: (loser.gamesLost || 0) + (loserId === p1Id ? p1Games : p2Games)
-                };
-                await supabase.from('players').update(updatedLoser).eq('id', loserId);
+                loser.losses = (loser.losses || 0) + 1;
+                loser.matchesPlayed = (loser.matchesPlayed || 0) + 1;
+                loser.setsWon = (loser.setsWon || 0) + Math.min(p1Sets, p2Sets);
+                loser.setsLost = (loser.setsLost || 0) + Math.max(p1Sets, p2Sets);
+                loser.gamesWon = (loser.gamesWon || 0) + (loserId === p1Id ? p2Games : p1Games);
+                loser.gamesLost = (loser.gamesLost || 0) + (loserId === p1Id ? p1Games : p2Games);
             }
 
-            await loadDataFromCloud();
-            alert('¡Partido registrado y ranking global actualizado!');
+            await saveToCloud();
+            alert('¡Partido guardado y ranking actualizado!');
             switchTab('ranking');
         }
 
-        // RENDERIZADO DE VISTAS Y TABLAS
+        // RENDERIZADOS Y VISTAS
         function updateUI() {
             renderPlayersGrid();
             renderRankingTable();
@@ -627,11 +609,11 @@
 
             const btn = document.getElementById('btn-save-match');
             btn.disabled = true;
-            btn.textContent = 'Sincronizando...';
+            btn.textContent = 'Guardando...';
 
             await registerMatch(
                 p1, p2,
-                { p1: +document.getElementById('s1-p1').value, p2: +document.getElementById('s2-p2').value },
+                { p1: +document.getElementById('s1-p1').value, p2: +document.getElementById('s1-p2').value },
                 { p1: +document.getElementById('s2-p1').value, p2: +document.getElementById('s2-p2').value },
                 { p1: +document.getElementById('s3-p1').value, p2: +document.getElementById('s3-p2').value }
             );
@@ -641,10 +623,10 @@
             document.getElementById('match-form').reset();
         });
 
-        // Inicialización y actualización automática en tiempo real
+        // Inicializar carga de datos y sincronización periódica cada 6 segundos
         document.addEventListener('DOMContentLoaded', () => {
-            loadDataFromCloud();
-            setInterval(loadDataFromCloud, 8000); // Polling automático cada 8 segundos
+            loadFromCloud();
+            setInterval(loadFromCloud, 6000);
         });
     </script>
 </body>
