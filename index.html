@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UTR PRO AMIGOS | Liga en Tiempo Real</title>
+    <title>UTR PRO AMIGOS | Liga de Tenis</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -26,6 +26,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Generador de Códigos QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
         .nav-btn {
@@ -76,7 +78,8 @@
             
             <nav class="space-y-1" id="main-nav">
                 <button onclick="switchTab('dashboard')" class="nav-btn active" id="btn-dashboard"><i class="fa-solid fa-chart-pie w-6"></i> Dashboard</button>
-                <button onclick="switchTab('players')" class="nav-btn" id="btn-players"><i class="fa-solid fa-user-plus w-6"></i> Registrarse / Jugadores</button>
+                <button onclick="switchTab('players')" class="nav-btn" id="btn-players"><i class="fa-solid fa-user-plus w-6"></i> Registrar Jugador</button>
+                <button onclick="switchTab('share')" class="nav-btn" id="btn-share"><i class="fa-solid fa-qrcode w-6"></i> 📲 Compartir / Sincronizar</button>
                 <button onclick="switchTab('random-match')" class="nav-btn" id="btn-random-match"><i class="fa-solid fa-shuffle w-6"></i> Sorteo Aleatorio</button>
                 <hr class="border-slate-800 my-2">
                 <button onclick="switchTab('ranking')" class="nav-btn" id="btn-ranking"><i class="fa-solid fa-trophy w-6"></i> Ranking Individual</button>
@@ -87,13 +90,10 @@
         </div>
 
         <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
-            <span id="sync-status" class="text-xs text-slate-400 flex items-center gap-2">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                Nube Activa
+            <span class="text-xs text-slate-400 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                Datos Guardados Seguro
             </span>
-            <button onclick="loadFromCloud()" class="text-xs text-tennis-400 hover:underline flex items-center gap-1">
-                <i class="fa-solid fa-rotate-right"></i> Actualizar
-            </button>
         </div>
     </aside>
 
@@ -111,7 +111,7 @@
                 <p id="badge-mvp" class="text-lg font-bold text-tennis-400 mt-1">--</p>
             </div>
             <div class="pro-card">
-                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">🏆 Jugadores Inscriptos</span>
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">🏆 Jugadores Registrados</span>
                 <p id="badge-count" class="text-lg font-bold text-sky-400 mt-1">0</p>
             </div>
             <div class="pro-card">
@@ -147,23 +147,41 @@
                 </div>
 
                 <div class="space-y-6">
-                    <h2 class="text-2xl font-bold border-l-4 border-sky-400 pl-3">Últimos Resultados</h2>
-                    <div id="dashboard-recent-matches" class="space-y-3"></div>
+                    <h2 class="text-2xl font-bold border-l-4 border-sky-400 pl-3">Acceso Rápido</h2>
+                    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <p class="text-xs text-slate-400">¿Quieres pasarle la lista de jugadores y el ranking a un amigo?</p>
+                        <button onclick="switchTab('share')" class="btn-lime w-full text-xs font-bold"><i class="fa-solid fa-qrcode mr-1"></i> Generar QR de Sincronización</button>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- AGREGAR JUGADOR / LISTA COMPARTIDA -->
+        <!-- AGREGAR JUGADOR / LISTA -->
         <div id="tab-players" class="tab-content hidden space-y-6">
             <div class="flex justify-between items-center">
                 <div>
                     <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Inscripción de Jugadores</h2>
-                    <p class="text-xs text-slate-400 mt-1">Regístrate para guardar tu perfil en la nube compartida.</p>
+                    <p class="text-xs text-slate-400 mt-1">Los jugadores registrados quedan permanentemente guardados.</p>
                 </div>
-                <button onclick="openPlayerModal()" class="btn-lime text-sm"><i class="fa-solid fa-user-plus mr-1"></i> Inscribirme Ahora</button>
+                <button onclick="openPlayerModal()" class="btn-lime text-sm"><i class="fa-solid fa-user-plus mr-1"></i> Registrar Jugador</button>
             </div>
 
             <div id="players-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
+        <!-- PESTAÑA COMPARTIR Y SINCRONIZAR -->
+        <div id="tab-share" class="tab-content hidden space-y-6 max-w-xl mx-auto text-center">
+            <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3 text-left">Enviar Datos a Celulares de Amigos</h2>
+            
+            <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-4 flex flex-col items-center">
+                <p class="text-sm text-slate-300">Tus amigos pueden escanear este código QR con la cámara de sus celulares para cargar **al instante** a todos los jugadores y los puntos actuales:</p>
+                
+                <div id="qrcode-container" class="bg-white p-4 rounded-xl border-4 border-tennis-400 my-2"></div>
+
+                <div class="w-full pt-2">
+                    <button onclick="copyShareLink()" class="btn-lime w-full font-bold text-sm"><i class="fa-solid fa-copy mr-1"></i> Copiar Enlace Directo para WhatsApp</button>
+                </div>
+            </div>
         </div>
 
         <!-- SORTEO ALEATORIO -->
@@ -248,7 +266,7 @@
                     </div>
                 </div>
 
-                <button type="submit" id="btn-save-match" class="btn-lime w-full font-bold">Guardar Partido y Sincronizar Puntos</button>
+                <button type="submit" id="btn-save-match" class="btn-lime w-full font-bold">Guardar Partido y Sumar Puntos</button>
             </form>
         </div>
 
@@ -304,66 +322,64 @@
         </div>
     </div>
 
-    <!-- FIREBASE REALTIME REST API (DIRECTO Y SIN ERRORES DE PERMISOS) -->
+    <!-- LÓGICA DE PERSISTENCIA INDESTRUCTIBLE -->
     <script>
-        const DB_URL = "https://utr-pro-amigos-default-rtdb.firebaseio.com/league.json";
+        const STORAGE_KEY = "utr_pro_league_permanent_v1";
 
         let globalData = {
             players: [],
             matches: []
         };
 
-        // CARGAR DATOS EN TIEMPO REAL DESDE LA NUBE
-        async function loadFromCloud() {
-            const status = document.getElementById('sync-status');
-            status.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Cargando...`;
+        // CARGA INICIAL (INCLUYENDO LECTURA DE DATOS DESDE LINK DE WHATSAPP/QR)
+        function initApp() {
+            // Verificar si entraron por un enlace compartido con datos
+            const urlParams = new URLSearchParams(window.location.search);
+            const sharedData = urlParams.get('sync');
 
-            try {
-                const response = await fetch(DB_URL + '?t=' + Date.now());
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data) {
-                        globalData.players = data.players ? Object.values(data.players) : [];
-                        globalData.matches = data.matches ? Object.values(data.matches) : [];
-                        localStorage.setItem('utr_pro_local_cache', JSON.stringify(globalData));
+            if (sharedData) {
+                try {
+                    const decoded = JSON.parse(decodeURIComponent(atob(sharedData)));
+                    if (decoded && Array.isArray(decoded.players)) {
+                        globalData = decoded;
+                        saveData();
+                        alert("¡Sincronización Exitosa! Datos de los jugadores y ranking cargados correctamente.");
+                        // Limpiar URL
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+                } catch (e) {
+                    console.error("Error leyendo datos compartidos", e);
+                }
+            } else {
+                // Cargar desde almacenamiento permanente del dispositivo
+                const local = localStorage.getItem(STORAGE_KEY);
+                if (local) {
+                    try {
+                        globalData = JSON.parse(local);
+                    } catch (e) {
+                        console.error(e);
                     }
                 }
-            } catch (error) {
-                const cache = localStorage.getItem('utr_pro_local_cache');
-                if (cache) globalData = JSON.parse(cache);
-            } finally {
-                updateUI();
-                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Nube Conectada`;
             }
-        }
 
-        // GUARDAR DATOS EN LA NUBE
-        async function saveToCloud() {
-            const status = document.getElementById('sync-status');
-            status.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span> Guardando...`;
-
-            localStorage.setItem('utr_pro_local_cache', JSON.stringify(globalData));
             updateUI();
-
-            try {
-                await fetch(DB_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(globalData)
-                });
-                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Guardado Exitoso`;
-            } catch (error) {
-                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-500"></span> Guardado Local`;
-            }
+            generateQRCode();
         }
 
-        // AGREGAR JUGADOR PERMANENTE
-        async function addPlayer(name, nickname, avatar) {
+        // GUARDADO EN MEMORIA PERMANENTE
+        function saveData() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(globalData));
+            updateUI();
+            generateQRCode();
+        }
+
+        // AGREGAR JUGADOR
+        function addPlayer(name, nickname, avatar) {
             const cleanName = name.trim();
             const exists = globalData.players.some(p => p.name.toLowerCase() === cleanName.toLowerCase());
             
             if (exists) {
-                alert('Ese jugador ya está registrado en el torneo.');
+                alert('Ese jugador ya está registrado.');
                 return;
             }
 
@@ -377,13 +393,13 @@
             };
 
             globalData.players.push(newPlayer);
-            await saveToCloud();
+            saveData();
             closePlayerModal();
-            alert(`¡${cleanName} inscripto exitosamente! Ya está guardado en la nube para todos.`);
+            alert(`¡${cleanName} guardado con éxito!`);
         }
 
-        // REGISTRAR PARTIDO Y ACTUALIZAR DATOS DE LIGA
-        async function registerMatch(p1Id, p2Id, s1, s2, s3) {
+        // REGISTRAR PARTIDO Y PUNTOS
+        function registerMatch(p1Id, p2Id, s1, s2, s3) {
             let p1Sets = 0, p2Sets = 0, p1Games = 0, p2Games = 0;
 
             if (s1.p1 > s1.p2) p1Sets++; else p2Sets++;
@@ -429,12 +445,37 @@
                 loser.gamesLost = (loser.gamesLost || 0) + (loserId === p1Id ? p1Games : p2Games);
             }
 
-            await saveToCloud();
+            saveData();
             alert('¡Partido guardado y ranking actualizado!');
             switchTab('ranking');
         }
 
-        // RENDERIZADOS Y VISTAS
+        // GENERAR CÓDIGO QR Y LINK DE COMPARTIR
+        function getShareableURL() {
+            const encodedData = btoa(encodeURIComponent(JSON.stringify(globalData)));
+            const baseURL = window.location.origin + window.location.pathname;
+            return `${baseURL}?sync=${encodedData}`;
+        }
+
+        function generateQRCode() {
+            const container = document.getElementById("qrcode-container");
+            if (!container) return;
+            container.innerHTML = "";
+            new QRCode(container, {
+                text: getShareableURL(),
+                width: 200,
+                height: 200
+            });
+        }
+
+        function copyShareLink() {
+            const url = getShareableURL();
+            navigator.clipboard.writeText(url).then(() => {
+                alert("¡Enlace copiado! Envíalo por WhatsApp a tus amigos para compartirles los jugadores y el ranking.");
+            });
+        }
+
+        // RENDERIZADO DE TABLAS Y RENDERERS
         function updateUI() {
             renderPlayersGrid();
             renderRankingTable();
@@ -485,7 +526,7 @@
             if (!grid) return;
 
             if (globalData.players.length === 0) {
-                grid.innerHTML = `<p class="text-slate-400 text-sm col-span-3">No hay jugadores inscriptos. Presiona "Inscribirme Ahora" para ser el primero.</p>`;
+                grid.innerHTML = `<p class="text-slate-400 text-sm col-span-3">No hay jugadores inscriptos. Presiona "Registrar Jugador".</p>`;
                 return;
             }
 
@@ -584,50 +625,33 @@
         function openPlayerModal() { document.getElementById('player-modal').classList.remove('hidden'); }
         function closePlayerModal() { document.getElementById('player-modal').classList.add('hidden'); }
 
-        document.getElementById('player-form')?.addEventListener('submit', async (e) => {
+        document.getElementById('player-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
-            const btn = document.getElementById('btn-save-player');
-            btn.disabled = true;
-            btn.textContent = 'Guardando...';
-
-            await addPlayer(
+            addPlayer(
                 document.getElementById('player-name').value,
                 document.getElementById('player-nickname').value,
                 document.getElementById('player-avatar').value
             );
-
-            btn.disabled = false;
-            btn.textContent = 'Confirmar Registro';
             document.getElementById('player-form').reset();
         });
 
-        document.getElementById('match-form')?.addEventListener('submit', async (e) => {
+        document.getElementById('match-form')?.addEventListener('submit', (e) => {
             e.preventDefault();
             const p1 = document.getElementById('p1-select').value;
             const p2 = document.getElementById('p2-select').value;
             if (p1 === p2) return alert('Selecciona dos jugadores diferentes');
 
-            const btn = document.getElementById('btn-save-match');
-            btn.disabled = true;
-            btn.textContent = 'Guardando...';
-
-            await registerMatch(
+            registerMatch(
                 p1, p2,
                 { p1: +document.getElementById('s1-p1').value, p2: +document.getElementById('s1-p2').value },
                 { p1: +document.getElementById('s2-p1').value, p2: +document.getElementById('s2-p2').value },
                 { p1: +document.getElementById('s3-p1').value, p2: +document.getElementById('s3-p2').value }
             );
 
-            btn.disabled = false;
-            btn.textContent = 'Guardar Partido y Sincronizar Puntos';
             document.getElementById('match-form').reset();
         });
 
-        // Inicializar carga de datos y sincronización periódica cada 6 segundos
-        document.addEventListener('DOMContentLoaded', () => {
-            loadFromCloud();
-            setInterval(loadFromCloud, 6000);
-        });
+        document.addEventListener('DOMContentLoaded', initApp);
     </script>
 </body>
 </html>
