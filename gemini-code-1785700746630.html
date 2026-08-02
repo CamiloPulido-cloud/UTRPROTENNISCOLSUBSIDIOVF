@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tennis Ranking League | ATP Style</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        tennis: {
+                            400: '#a3e635',
+                            500: '#84cc16',
+                            600: '#65a30d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (Para Exportar a Excel) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        .nav-btn {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem 0.875rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #94a3b8;
+            transition: all 0.2s;
+        }
+        .nav-btn:hover {
+            color: #ffffff;
+            background-color: rgba(30, 41, 59, 0.7);
+        }
+        .nav-btn.active {
+            background-color: rgba(163, 230, 53, 0.1);
+            color: #a3e635;
+            font-weight: 600;
+            border-right: 3px solid #a3e635;
+        }
+        .pro-card {
+            background-color: #0f172a;
+            border: 1px solid rgba(30, 41, 59, 0.8);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+        }
+        .stat-box {
+            background-color: #0f172a;
+            border: 1px solid #1e293b;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .input-dark {
+            background-color: #020617;
+            border: 1px solid #1e293b;
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            color: #f8fafc;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .input-dark:focus {
+            border-color: #a3e635;
+        }
+        .btn-lime {
+            background-color: #a3e635;
+            color: #020617;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+            box-shadow: 0 4px 10px rgba(163, 230, 53, 0.15);
+        }
+        .btn-lime:hover {
+            background-color: #bef264;
+        }
+        .btn-slate {
+            background-color: #1e293b;
+            color: #e2e8f0;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+        }
+        .btn-slate:hover {
+            background-color: #334155;
+        }
+        .tab-content {
+            animation: fadeIn 0.25s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col md:flex-row">
+
+    <!-- Sidebar / Navegación -->
+    <aside class="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 p-4 flex flex-col justify-between shrink-0">
+        <div>
+            <div class="flex items-center gap-3 mb-8 px-2">
+                <i class="fa-solid fa-tennis-ball text-tennis-400 text-3xl animate-spin" style="animation-duration: 10s;"></i>
+                <div>
+                    <h1 class="font-extrabold text-xl tracking-wider text-white">TRL</h1>
+                    <span class="text-tennis-400 text-xs block font-semibold tracking-wider">TENNIS LEAGUE</span>
+                </div>
+            </div>
+            
+            <nav class="space-y-1" id="main-nav">
+                <button onclick="switchTab('dashboard')" class="nav-btn active" id="btn-dashboard"><i class="fa-solid fa-chart-pie w-6"></i> Dashboard</button>
+                <button onclick="switchTab('fixture')" class="nav-btn" id="btn-fixture"><i class="fa-solid fa-calendar-days w-6"></i> Fixture & Fechas</button>
+                <button onclick="switchTab('ranking')" class="nav-btn" id="btn-ranking"><i class="fa-solid fa-trophy w-6"></i> Ranking Individual</button>
+                <button onclick="switchTab('doubles')" class="nav-btn" id="btn-doubles"><i class="fa-solid fa-user-group w-6"></i> Ranking Dobles</button>
+                <button onclick="switchTab('matches')" class="nav-btn" id="btn-matches"><i class="fa-solid fa-calendar-plus w-6"></i> Registrar Partido</button>
+                <button onclick="switchTab('h2h')" class="nav-btn" id="btn-h2h"><i class="fa-solid fa-handshake-simple w-6"></i> Head to Head</button>
+                <button onclick="switchTab('players')" class="nav-btn" id="btn-players"><i class="fa-solid fa-users w-6"></i> Jugadores</button>
+                <button onclick="switchTab('stats')" class="nav-btn" id="btn-stats"><i class="fa-solid fa-chart-line w-6"></i> Estadísticas</button>
+                <button onclick="switchTab('settings')" class="nav-btn" id="btn-settings"><i class="fa-solid fa-sliders w-6"></i> Datos & Backup</button>
+            </nav>
+        </div>
+
+        <div class="pt-4 border-t border-slate-800 flex items-center justify-between">
+            <span class="text-xs text-slate-400">Temporada Amigos 🎾</span>
+            <button onclick="toggleTheme()" class="p-2 text-slate-400 hover:text-white rounded-lg" title="Cambiar Tema"><i class="fa-solid fa-circle-half-stroke"></i></button>
+        </div>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <main class="flex-1 p-4 md:p-8 overflow-y-auto max-w-7xl mx-auto w-full space-y-6">
+        
+        <!-- TOP BADGES / FUNCIONES PRO -->
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="pro-card">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">👑 Rey del Ranking</span>
+                <p id="badge-king" class="text-lg font-bold text-amber-400 mt-1">--</p>
+            </div>
+            <div class="pro-card">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">🔥 Racha Actual</span>
+                <p id="badge-streak" class="text-lg font-bold text-orange-500 mt-1">--</p>
+            </div>
+            <div class="pro-card">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">🎾 Mayor Efectividad</span>
+                <p id="badge-mvp" class="text-lg font-bold text-tennis-400 mt-1">--</p>
+            </div>
+            <div class="pro-card">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">🏆 Campeón Mes</span>
+                <p id="badge-champ" class="text-lg font-bold text-sky-400 mt-1">--</p>
+            </div>
+        </section>
+
+        <!-- DASHBOARD TAB -->
+        <div id="tab-dashboard" class="tab-content space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2 space-y-6">
+                    <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Resumen del Torneo</h2>
+                    
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <div class="stat-box">
+                            <span class="text-slate-400 text-sm">Jugadores</span>
+                            <span id="stat-players" class="text-3xl font-black text-tennis-400">0</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="text-slate-400 text-sm">Partidos Jugados</span>
+                            <span id="stat-matches" class="text-3xl font-black text-sky-400">0</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="text-slate-400 text-sm">Sets Totales</span>
+                            <span id="stat-sets" class="text-3xl font-black text-purple-400">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Top 5 Ranking -->
+                    <div class="bg-slate-900 rounded-xl p-6 border border-slate-800">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-lg text-white">Top Liderazgo</h3>
+                            <button onclick="switchTab('ranking')" class="text-xs text-tennis-400 hover:underline">Ver Tabla Completa →</button>
+                        </div>
+                        <div id="dashboard-top-ranking" class="divide-y divide-slate-800"></div>
+                    </div>
+                </div>
+
+                <!-- Próximos Enfrentamientos de la Fecha -->
+                <div class="space-y-6">
+                    <h2 class="text-2xl font-bold border-l-4 border-sky-400 pl-3">Próxima Fecha</h2>
+                    <div id="dashboard-next-fixture" class="space-y-3"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FIXTURE & FECHAS TAB (ADICIONAL SOLICITADO) -->
+        <div id="tab-fixture" class="tab-content hidden space-y-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Fixture de Enfrentamientos</h2>
+                    <p class="text-xs text-slate-400 mt-1">Consulta quién juega contra quién en cada fecha del torneo.</p>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="generateFixture()" class="btn-lime text-xs"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Generar Fixture Liga</button>
+                </div>
+            </div>
+
+            <!-- Selector de Fecha -->
+            <div class="flex items-center gap-4 bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <span class="text-sm font-semibold text-slate-300">Seleccionar Fecha:</span>
+                <select id="fixture-date-select" onchange="renderFixtureByDate()" class="input-dark text-sm w-48"></select>
+            </div>
+
+            <!-- Lista de Partidos de la Fecha Seleccionada -->
+            <div id="fixture-matches-container" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </div>
+
+        <!-- RANKING INDIVIDUAL TAB -->
+        <div id="tab-ranking" class="tab-content hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Ranking General Singles</h2>
+                <input type="text" id="ranking-search" oninput="RankingManager.renderTable()" placeholder="Buscar jugador..." class="input-dark w-48 text-sm">
+            </div>
+
+            <div class="overflow-x-auto bg-slate-900 rounded-xl border border-slate-800">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-800/80 text-slate-400 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="p-4">Pos</th>
+                            <th class="p-4">Jugador</th>
+                            <th class="p-4">PJ</th>
+                            <th class="p-4">G</th>
+                            <th class="p-4">P</th>
+                            <th class="p-4">Sets (Dif)</th>
+                            <th class="p-4">Juegos (Dif)</th>
+                            <th class="p-4">Efectividad</th>
+                            <th class="p-4 font-bold text-tennis-400">Puntos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ranking-table-body" class="divide-y divide-slate-800 text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- RANKING DOBLES TAB -->
+        <div id="tab-doubles" class="tab-content hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold border-l-4 border-purple-400 pl-3">Liga de Dobles</h2>
+                <button onclick="openDoublesModal()" class="btn-lime text-sm"><i class="fa-solid fa-plus mr-1"></i> Crear Pareja/Equipo</button>
+            </div>
+
+            <div class="overflow-x-auto bg-slate-900 rounded-xl border border-slate-800">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-800/80 text-slate-400 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="p-4">Pos</th>
+                            <th class="p-4">Equipo</th>
+                            <th class="p-4">PJ</th>
+                            <th class="p-4">G</th>
+                            <th class="p-4">P</th>
+                            <th class="p-4">Sets (Dif)</th>
+                            <th class="p-4 font-bold text-tennis-400">Puntos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="doubles-table-body" class="divide-y divide-slate-800 text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- REGISTRAR PARTIDO TAB -->
+        <div id="tab-matches" class="tab-content hidden max-w-2xl mx-auto bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-6">
+            <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Registrar Marcador Oficial</h2>
+            
+            <form id="match-form" class="space-y-6">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs uppercase text-slate-400 mb-2">Jugador A</label>
+                        <select id="p1-select" class="input-dark w-full" required></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase text-slate-400 mb-2">Jugador B</label>
+                        <select id="p2-select" class="input-dark w-full" required></select>
+                    </div>
+                </div>
+
+                <div class="border-t border-b border-slate-800 py-4 space-y-4">
+                    <span class="text-xs uppercase text-slate-400 font-bold tracking-wider block">Sets (Al mejor de 3)</span>
+                    
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm font-semibold w-16">Set 1:</span>
+                        <input type="number" id="s1-p1" min="0" max="7" class="input-dark text-center w-full" placeholder="J1" required>
+                        <span>-</span>
+                        <input type="number" id="s1-p2" min="0" max="7" class="input-dark text-center w-full" placeholder="J2" required>
+                    </div>
+                    
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm font-semibold w-16">Set 2:</span>
+                        <input type="number" id="s2-p1" min="0" max="7" class="input-dark text-center w-full" placeholder="J1" required>
+                        <span>-</span>
+                        <input type="number" id="s2-p2" min="0" max="7" class="input-dark text-center w-full" placeholder="J2" required>
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm font-semibold w-16">Set 3:</span>
+                        <input type="number" id="s3-p1" min="0" max="7" class="input-dark text-center w-full" placeholder="J1">
+                        <span>-</span>
+                        <input type="number" id="s3-p2" min="0" max="7" class="input-dark text-center w-full" placeholder="J2">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-lime w-full font-bold">Guardar Partido y Actualizar Ranking</button>
+            </form>
+        </div>
+
+        <!-- HEAD TO HEAD TAB -->
+        <div id="tab-h2h" class="tab-content hidden space-y-6">
+            <h2 class="text-2xl font-bold border-l-4 border-sky-400 pl-3">Comparativa Head to Head</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">Jugador 1</label>
+                    <select id="h2h-p1" onchange="renderH2H()" class="input-dark w-full"></select>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">Jugador 2</label>
+                    <select id="h2h-p2" onchange="renderH2H()" class="input-dark w-full"></select>
+                </div>
+            </div>
+
+            <div id="h2h-results" class="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-4"></div>
+        </div>
+
+        <!-- JUGADORES TAB -->
+        <div id="tab-players" class="tab-content hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Gestión de Jugadores</h2>
+                <button onclick="openPlayerModal()" class="btn-lime text-sm"><i class="fa-solid fa-plus mr-1"></i> Registrar Jugador</button>
+            </div>
+
+            <div id="players-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </div>
+
+        <!-- ESTADÍSTICAS TAB -->
+        <div id="tab-stats" class="tab-content hidden space-y-6">
+            <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Estadísticas Gráficas</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                    <h3 class="text-sm font-bold text-slate-400 mb-4">Victorias por Jugador</h3>
+                    <canvas id="chart-wins"></canvas>
+                </div>
+                <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                    <h3 class="text-sm font-bold text-slate-400 mb-4">Efectividad (% Victorias)</h3>
+                    <canvas id="chart-eff"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- DATOS Y RESPALDO TAB -->
+        <div id="tab-settings" class="tab-content hidden space-y-6 max-w-xl mx-auto">
+            <h2 class="text-2xl font-bold border-l-4 border-tennis-400 pl-3">Exportar y Copias de Seguridad</h2>
+            
+            <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-4">
+                <h3 class="font-bold text-white">Descargar Datos</h3>
+                <p class="text-xs text-slate-400">Guarda toda tu información o transpórtala a Excel.</p>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button onclick="exportJSON()" class="btn-slate flex-1"><i class="fa-solid fa-file-code mr-1"></i> Respaldar JSON</button>
+                    <button onclick="exportExcel()" class="btn-slate flex-1"><i class="fa-solid fa-file-excel mr-1"></i> Exportar Excel</button>
+                </div>
+            </div>
+
+            <div class="bg-slate-900 p-6 rounded-xl border border-slate-800 space-y-4">
+                <h3 class="font-bold text-white">Importar Copia de Seguridad</h3>
+                <input type="file" id="import-file" class="input-dark w-full text-xs" onchange="importJSON(event)">
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modal Nuevo/Editar Jugador -->
+    <div id="player-modal" class="fixed inset-0 bg-black/70 hidden backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-4">
+            <h3 class="text-xl font-bold text-white">Añadir Jugador</h3>
+            <form id="player-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">Nombre Completo</label>
+                    <input type="text" id="player-name" class="input-dark w-full" required>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">Apodo</label>
+                    <input type="text" id="player-nickname" class="input-dark w-full">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase text-slate-400 mb-1">URL Avatar / Foto</label>
+                    <input type="url" id="player-avatar" placeholder="https://..." class="input-dark w-full">
+                </div>
+                <div class="flex justify-end gap-3 pt-4">
+                    <button type="button" onclick="closePlayerModal()" class="btn-slate">Cancelar</button>
+                    <button type="submit" class="btn-lime">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- LÓGICA DE LA APLICACIÓN EN JAVASCRIPT -->
+    <script>
+        // --- STORAGE & MODELOS ---
+        const DB_KEYS = {
+            PLAYERS: 'trl_players_v2',
+            MATCHES: 'trl_matches_v2',
+            FIXTURE: 'trl_fixture_v2',
+            DOUBLES: 'trl_doubles_v2'
+        };
+
+        const Storage = {
+            get(key) {
+                const d = localStorage.getItem(key);
+                return d ? JSON.parse(d) : [];
+            },
+            set(key, val) {
+                localStorage.setItem(key, JSON.stringify(val));
+            }
+        };
+
+        // Carga Inicial Demo si está vacío
+        function seedDemoData() {
+            if (Storage.get(DB_KEYS.PLAYERS).length === 0) {
+                const demoPlayers = [
+                    { id: 'p1', name: 'Carlos Alcaraz', nickname: 'Carlitos', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150', matchesPlayed: 2, wins: 2, losses: 0, setsWon: 4, setsLost: 0, gamesWon: 24, gamesLost: 10, points: 8 },
+                    { id: 'p2', name: 'Jannik Sinner', nickname: 'Zorro', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150', matchesPlayed: 2, wins: 1, losses: 1, setsWon: 2, setsLost: 2, gamesWon: 18, gamesLost: 16, points: 3 },
+                    { id: 'p3', name: 'Novak Djokovic', nickname: 'Nole', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150', matchesPlayed: 2, wins: 0, losses: 2, setsWon: 0, setsLost: 4, gamesWon: 8, gamesLost: 24, points: 0 }
+                ];
+                Storage.set(DB_KEYS.PLAYERS, demoPlayers);
+            }
+        }
+
+        // --- GESTOR DE JUGADORES ---
+        const PlayersManager = {
+            add(name, nickname, avatar) {
+                const players = Storage.get(DB_KEYS.PLAYERS);
+                players.push({
+                    id: 'p_' + Date.now(),
+                    name, nickname: nickname || name,
+                    avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+                    matchesPlayed: 0, wins: 0, losses: 0,
+                    setsWon: 0, setsLost: 0, gamesWon: 0, gamesLost: 0, points: 0
+                });
+                Storage.set(DB_KEYS.PLAYERS, players);
+            },
+            delete(id) {
+                const players = Storage.get(DB_KEYS.PLAYERS).filter(p => p.id !== id);
+                Storage.set(DB_KEYS.PLAYERS, players);
+                app.init();
+            },
+            renderGrid() {
+                const grid = document.getElementById('players-grid');
+                const players = Storage.get(DB_KEYS.PLAYERS);
+                grid.innerHTML = players.map(p => `
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex items-center gap-4 relative">
+                        <img src="${p.avatar}" class="w-16 h-16 rounded-full object-cover border-2 border-tennis-400">
+                        <div>
+                            <h4 class="font-bold text-white text-lg">${p.name}</h4>
+                            <p class="text-xs text-tennis-400">"${p.nickname}"</p>
+                            <div class="text-xs text-slate-400 mt-2 flex gap-3">
+                                <span>PJ: ${p.matchesPlayed}</span>
+                                <span>Pts: ${p.points}</span>
+                            </div>
+                        </div>
+                        <button onclick="PlayersManager.delete('${p.id}')" class="absolute top-3 right-3 text-slate-600 hover:text-red-400">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
+        };
+
+        // --- GESTOR DE RANKING ---
+        const RankingManager = {
+            getSorted() {
+                return Storage.get(DB_KEYS.PLAYERS).sort((a, b) => {
+                    if (b.points !== a.points) return b.points - a.points;
+                    if (b.wins !== a.wins) return b.wins - a.wins;
+                    return (b.setsWon - b.setsLost) - (a.setsWon - a.setsLost);
+                });
+            },
+            renderTable() {
+                const tbody = document.getElementById('ranking-table-body');
+                const search = document.getElementById('ranking-search').value.toLowerCase();
+                const ranked = this.getSorted().filter(p => p.name.toLowerCase().includes(search));
+
+                tbody.innerHTML = ranked.map((p, idx) => {
+                    const eff = p.matchesPlayed > 0 ? ((p.wins / p.matchesPlayed) * 100).toFixed(1) : '0.0';
+                    const setDiff = p.setsWon - p.setsLost;
+                    const gameDiff = p.gamesWon - p.gamesLost;
+
+                    return `
+                        <tr class="hover:bg-slate-800/50 transition-colors">
+                            <td class="p-4 font-bold ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-600' : 'text-slate-500'}">#${idx + 1}</td>
+                            <td class="p-4 flex items-center gap-3">
+                                <img src="${p.avatar}" class="w-8 h-8 rounded-full object-cover">
+                                <span class="font-bold text-white">${p.name}</span>
+                            </td>
+                            <td class="p-4 text-slate-300">${p.matchesPlayed}</td>
+                            <td class="p-4 text-green-400 font-semibold">${p.wins}</td>
+                            <td class="p-4 text-red-400">${p.losses}</td>
+                            <td class="p-4 text-slate-400">${p.setsWon}-${p.setsLost} (${setDiff > 0 ? '+' : ''}${setDiff})</td>
+                            <td class="p-4 text-slate-400">${p.gamesWon}-${p.gamesLost} (${gameDiff > 0 ? '+' : ''}${gameDiff})</td>
+                            <td class="p-4 font-mono text-slate-300">${eff}%</td>
+                            <td class="p-4 text-tennis-400 font-black text-base">${p.points}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        };
+
+        // --- GESTOR DE PARTIDOS & PUNTUACIÓN ---
+        const MatchesManager = {
+            register(p1Id, p2Id, s1, s2, s3) {
+                let p1Sets = 0, p2Sets = 0, p1Games = 0, p2Games = 0;
+
+                if (s1.p1 > s1.p2) p1Sets++; else p2Sets++;
+                p1Games += s1.p1; p2Games += s1.p2;
+
+                if (s2.p1 > s2.p2) p1Sets++; else p2Sets++;
+                p1Games += s2.p1; p2Games += s2.p2;
+
+                if (s3 && (s3.p1 > 0 || s3.p2 > 0)) {
+                    if (s3.p1 > s3.p2) p1Sets++; else p2Sets++;
+                    p1Games += s3.p1; p2Games += s3.p2;
+                }
+
+                const winnerId = p1Sets > p2Sets ? p1Id : p2Id;
+                const loserId = winnerId === p1Id ? p2Id : p1Id;
+                const isCleanSweep = (p1Sets === 2 && p2Sets === 0) || (p2Sets === 2 && p1Sets === 0);
+
+                const matches = Storage.get(DB_KEYS.MATCHES);
+                matches.unshift({ id: 'm_' + Date.now(), p1Id, p2Id, p1Sets, p2Sets, p1Games, p2Games, winnerId });
+                Storage.set(DB_KEYS.MATCHES, matches);
+
+                // Actualizar puntuación de la liga
+                const players = Storage.get(DB_KEYS.PLAYERS);
+                const w = players.find(p => p.id === winnerId);
+                const l = players.find(p => p.id === loserId);
+
+                if (w && l) {
+                    w.points += (3 + (isCleanSweep ? 1 : 0));
+                    w.wins++; w.matchesPlayed++;
+                    w.setsWon += Math.max(p1Sets, p2Sets); w.setsLost += Math.min(p1Sets, p2Sets);
+                    w.gamesWon += (winnerId === p1Id ? p1Games : p2Games);
+                    w.gamesLost += (winnerId === p1Id ? p2Games : p1Games);
+
+                    l.losses++; l.matchesPlayed++;
+                    l.setsWon += Math.min(p1Sets, p2Sets); l.setsLost += Math.max(p1Sets, p2Sets);
+                    l.gamesWon += (loserId === p1Id ? p1Games : p2Games);
+                    l.gamesLost += (loserId === p1Id ? p2Games : p1Games);
+
+                    Storage.set(DB_KEYS.PLAYERS, players);
+                }
+            }
+        };
+
+        // --- GENERADOR Y VISUALIZADOR DE FIXTURE POR FECHAS ---
+        function generateFixture() {
+            const players = Storage.get(DB_KEYS.PLAYERS);
+            if (players.length < 2) return alert('Se necesitan al menos 2 jugadores para generar el fixture.');
+
+            let pList = [...players];
+            if (pList.length % 2 !== 0) pList.push({ id: null, name: 'DESCANSO' });
+
+            const n = pList.length;
+            const rounds = n - 1;
+            const matchesPerRound = n / 2;
+            const fixture = [];
+
+            for (let r = 0; r < rounds; r++) {
+                const roundMatches = [];
+                for (let i = 0; i < matchesPerRound; i++) {
+                    const home = pList[i];
+                    const away = pList[n - 1 - i];
+                    if (home.id && away.id) {
+                        roundMatches.push({
+                            id: `fix_${r}_${i}`,
+                            dateIndex: r + 1,
+                            p1Id: home.id,
+                            p2Id: away.id,
+                            status: 'Pendiente' // Pendiente, En Juego, Finalizado
+                        });
+                    }
+                }
+                fixture.push(...roundMatches);
+                pList.splice(1, 0, pList.pop());
+            }
+
+            Storage.set(DB_KEYS.FIXTURE, fixture);
+            alert('¡Fixture de liga generado correctamente!');
+            initFixtureView();
+        }
+
+        function initFixtureView() {
+            const fixture = Storage.get(DB_KEYS.FIXTURE);
+            const select = document.getElementById('fixture-date-select');
+            
+            if (fixture.length === 0) {
+                select.innerHTML = '<option>Sin Fixture</option>';
+                document.getElementById('fixture-matches-container').innerHTML = '<p class="text-slate-400 text-sm">Haz clic en "Generar Fixture Liga" para organizar todas las fechas.</p>';
+                return;
+            }
+
+            const dates = [...new Set(fixture.map(f => f.dateIndex))];
+            select.innerHTML = dates.map(d => `<option value="${d}">Fecha #${d}</option>`).join('');
+            renderFixtureByDate();
+        }
+
+        function renderFixtureByDate() {
+            const selectedDate = document.getElementById('fixture-date-select').value;
+            const fixture = Storage.get(DB_KEYS.FIXTURE).filter(f => f.dateIndex == selectedDate);
+            const players = Storage.get(DB_KEYS.PLAYERS);
+            const container = document.getElementById('fixture-matches-container');
+
+            container.innerHTML = fixture.map(f => {
+                const p1 = players.find(p => p.id === f.p1Id);
+                const p2 = players.find(p => p.id === f.p2Id);
+
+                return `
+                    <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
+                        <div class="flex items-center gap-3 w-5/12">
+                            <img src="${p1?.avatar}" class="w-8 h-8 rounded-full">
+                            <span class="font-bold text-sm text-white truncate">${p1?.name}</span>
+                        </div>
+                        <span class="text-xs font-bold text-tennis-400 uppercase">VS</span>
+                        <div class="flex items-center gap-3 justify-end w-5/12 text-right">
+                            <span class="font-bold text-sm text-white truncate">${p2?.name}</span>
+                            <img src="${p2?.avatar}" class="w-8 h-8 rounded-full">
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- HEAD TO HEAD ---
+        function renderH2H() {
+            const p1Id = document.getElementById('h2h-p1').value;
+            const p2Id = document.getElementById('h2h-p2').value;
+            const container = document.getElementById('h2h-results');
+
+            if (p1Id === p2Id) {
+                container.innerHTML = '<p class="text-slate-400 text-sm">Selecciona dos jugadores distintos.</p>';
+                return;
+            }
+
+            const matches = Storage.get(DB_KEYS.MATCHES).filter(m => 
+                (m.p1Id === p1Id && m.p2Id === p2Id) || (m.p1Id === p2Id && m.p2Id === p1Id)
+            );
+
+            let p1Wins = 0, p2Wins = 0;
+            matches.forEach(m => {
+                if (m.winnerId === p1Id) p1Wins++; else p2Wins++;
+            });
+
+            container.innerHTML = `
+                <div class="flex justify-around items-center text-center">
+                    <div>
+                        <span class="text-3xl font-black text-tennis-400">${p1Wins}</span>
+                        <p class="text-xs text-slate-400">Victorias J1</p>
+                    </div>
+                    <div class="text-slate-500 font-bold">VS (${matches.length} Jugados)</div>
+                    <div>
+                        <span class="text-3xl font-black text-sky-400">${p2Wins}</span>
+                        <p class="text-xs text-slate-400">Victorias J2</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- ESTADÍSTICAS CHART.JS ---
+        let winsChartInstance = null;
+        function renderCharts() {
+            const players = Storage.get(DB_KEYS.PLAYERS);
+            const ctx = document.getElementById('chart-wins')?.getContext('2d');
+            if (!ctx) return;
+
+            if (winsChartInstance) winsChartInstance.destroy();
+
+            winsChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: players.map(p => p.name),
+                    datasets: [{
+                        label: 'Victorias',
+                        data: players.map(p => p.wins),
+                        backgroundColor: '#a3e635'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+                        x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        // --- RESPALDO Y EXPORTACIÓN ---
+        function exportJSON() {
+            const data = {
+                players: Storage.get(DB_KEYS.PLAYERS),
+                matches: Storage.get(DB_KEYS.MATCHES),
+                fixture: Storage.get(DB_KEYS.FIXTURE)
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tennis_league_backup.json`;
+            a.click();
+        }
+
+        function exportExcel() {
+            const players = Storage.get(DB_KEYS.PLAYERS);
+            const ws = XLSX.utils.json_to_sheet(players);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Ranking");
+            XLSX.writeFile(wb, "tennis_ranking.xlsx");
+        }
+
+        function importJSON(e) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = JSON.parse(event.target.result);
+                if (data.players) Storage.set(DB_KEYS.PLAYERS, data.players);
+                if (data.matches) Storage.set(DB_KEYS.MATCHES, data.matches);
+                if (data.fixture) Storage.set(DB_KEYS.FIXTURE, data.fixture);
+                alert('¡Datos importados con éxito!');
+                app.init();
+            };
+            reader.readAsText(e.target.files[0]);
+        }
+
+        // --- APLICACIÓN PRINCIPAL ---
+        const app = {
+            init() {
+                seedDemoData();
+                this.populateSelects();
+                RankingManager.renderTable();
+                PlayersManager.renderGrid();
+                initFixtureView();
+                renderCharts();
+                
+                const ranked = RankingManager.getSorted();
+                document.getElementById('badge-king').textContent = ranked[0] ? ranked[0].name : '--';
+                document.getElementById('stat-players').textContent = Storage.get(DB_KEYS.PLAYERS).length;
+                document.getElementById('stat-matches').textContent = Storage.get(DB_KEYS.MATCHES).length;
+            },
+            populateSelects() {
+                const players = Storage.get(DB_KEYS.PLAYERS);
+                const opts = '<option value="">Seleccionar...</option>' + players.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+                ['p1-select', 'p2-select', 'h2h-p1', 'h2h-p2'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerHTML = opts;
+                });
+            }
+        };
+
+        // Navegación
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(`tab-${tabId}`)?.classList.remove('hidden');
+            document.getElementById(`btn-${tabId}`)?.classList.add('active');
+        }
+
+        function openPlayerModal() { document.getElementById('player-modal').classList.remove('hidden'); }
+        function closePlayerModal() { document.getElementById('player-modal').classList.add('hidden'); }
+
+        // Registrar Partido Handler
+        document.getElementById('match-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const p1 = document.getElementById('p1-select').value;
+            const p2 = document.getElementById('p2-select').value;
+
+            if (p1 === p2) return alert('Debes elegir dos jugadores diferentes');
+
+            MatchesManager.register(
+                p1, p2,
+                { p1: +document.getElementById('s1-p1').value, p2: +document.getElementById('s1-p2').value },
+                { p1: +document.getElementById('s2-p1').value, p2: +document.getElementById('s2-p2').value },
+                { p1: +document.getElementById('s3-p1').value, p2: +document.getElementById('s3-p2').value }
+            );
+
+            alert('Partido guardado e integrado al Ranking.');
+            app.init();
+            switchTab('ranking');
+        });
+
+        // Registrar Jugador Handler
+        document.getElementById('player-form')?.addEventListener('submit', (e) => {
+            e.preventDefault();
+            PlayersManager.add(
+                document.getElementById('player-name').value,
+                document.getElementById('player-nickname').value,
+                document.getElementById('player-avatar').value
+            );
+            closePlayerModal();
+            app.init();
+        });
+
+        document.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+</body>
+</html>
